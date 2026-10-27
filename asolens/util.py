@@ -1,5 +1,6 @@
 """Small helpers shared across modules."""
 
+import concurrent.futures
 import datetime
 
 
@@ -40,3 +41,18 @@ def wrap(text, width):
     if line:
         out.append(line)
     return out
+
+
+def parallel_map(func, items, workers=6):
+    """Apply `func` over `items` concurrently, preserving input order.
+
+    Every call site here is network-bound, so threads are the right tool and
+    the pool stays small enough to be polite to Apple's endpoints. Exceptions
+    propagate to the caller as they would from a plain map.
+    """
+    items = list(items)
+    if len(items) < 2:
+        return [func(item) for item in items]
+    size = max(1, min(workers, len(items)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=size) as pool:
+        return list(pool.map(func, items))

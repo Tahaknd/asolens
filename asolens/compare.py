@@ -7,7 +7,7 @@ in their indexed fields (title + subtitle) that you do not use at all.
 import collections
 
 from asolens import aso, ios_store
-from asolens.util import days_since
+from asolens.util import days_since, parallel_map
 
 
 
@@ -66,14 +66,16 @@ def keyword_gap(target, competitors):
 
 
 def run(target, competitor_ids, country="us", ttl=3600):
-    competitors = []
-    errors = []
-    for app_id in competitor_ids:
+    def fetch(app_id):
         try:
-            competitors.append(
-                ios_store.fetch_app(app_id, country=country, ttl=ttl, with_reviews=False))
+            return ios_store.fetch_app(
+                app_id, country=country, ttl=ttl, with_reviews=False), None
         except Exception as exc:  # a dead competitor id must not kill the run
-            errors.append({"id": app_id, "error": str(exc)})
+            return None, {"id": app_id, "error": str(exc)}
+
+    competitors, errors = [], []
+    for app, error in parallel_map(fetch, competitor_ids):
+        (errors if error else competitors).append(error or app)
     return {
         "rows": [row(target)] + [row(c) for c in competitors],
         "keyword_gap": keyword_gap(target, competitors),

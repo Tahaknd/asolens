@@ -1,6 +1,7 @@
 import unittest
+from unittest import mock
 
-from asolens import compare
+from asolens import compare, ios_store
 from tests.support import days_ago, make_app
 
 
@@ -81,6 +82,26 @@ class KeywordGapTests(unittest.TestCase):
         surface = self.gap(target, [])["our_surface"]
         self.assertIn("budget", surface)
         self.assertNotIn("receipts", surface)
+
+
+class RunTests(unittest.TestCase):
+    def test_a_failing_competitor_is_recorded_not_raised(self):
+        def fetch(app_id, **kwargs):
+            if app_id == "bad":
+                raise RuntimeError("404")
+            return make_app(id=app_id, name="Rival " + app_id)
+
+        with mock.patch.object(ios_store, "fetch_app", side_effect=fetch):
+            result = compare.run(make_app(), ["good", "bad"], country="us")
+        self.assertEqual(result["count"], 1)
+        self.assertEqual([e["id"] for e in result["errors"]], ["bad"])
+
+    def test_the_target_is_always_the_first_row(self):
+        with mock.patch.object(ios_store, "fetch_app",
+                               side_effect=lambda i, **k: make_app(name="Rival")):
+            result = compare.run(make_app(name="Mine"), ["a", "b"], country="us")
+        self.assertEqual(result["rows"][0]["name"], "Mine")
+        self.assertEqual(len(result["rows"]), 3)
 
 
 if __name__ == "__main__":

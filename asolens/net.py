@@ -5,10 +5,12 @@ not hammer Apple's endpoints. Cache entries are keyed by URL and expire after
 `ttl` seconds.
 """
 
+import contextlib
 import gzip
 import hashlib
 import json
 import os
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -61,10 +63,23 @@ def get(url, ttl=3600, timeout=25, binary=False, ua=UA):
             raise FetchError("HTTP %s for %s" % (exc.code, url)) from exc
         except Exception as exc:
             raise FetchError("%s for %s" % (exc, url)) from exc
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(path, "wb") as fh:
-            fh.write(raw)
+        _write_atomically(path, raw)
     return raw if binary else raw.decode("utf-8", "replace")
+
+
+def _write_atomically(path, raw):
+    """Write through a temp file so a concurrent reader never sees a partial
+    cache entry — fetches run in parallel and may target the same URL."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    handle, tmp = tempfile.mkstemp(dir=CACHE_DIR, suffix=".part")
+    try:
+        with os.fdopen(handle, "wb") as fh:
+            fh.write(raw)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
 
 
 def get_json(url, ttl=3600, ua=UA):

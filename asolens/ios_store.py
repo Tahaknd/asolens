@@ -13,6 +13,7 @@ import re
 import urllib.parse
 
 from asolens import net
+from asolens.util import parallel_map
 
 LOOKUP = "https://itunes.apple.com/lookup?id={app_id}&country={country}"
 PAGE = "https://apps.apple.com/{country}/app/id{app_id}"
@@ -213,9 +214,12 @@ def fetch_app(app_id, country="us", review_countries=(), review_pages=REVIEW_PAG
     }
     if with_reviews:
         countries = list(review_countries) or [country]
+        batches = parallel_map(
+            lambda code: reviews(app_id, country=code, pages=review_pages, ttl=ttl),
+            countries)
         seen = set()
-        for code in countries:
-            for review in reviews(app_id, country=code, pages=review_pages, ttl=ttl):
+        for batch in batches:
+            for review in batch:
                 if review["id"] in seen:
                     continue
                 seen.add(review["id"])
