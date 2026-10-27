@@ -17,7 +17,8 @@ def _days_since(stamp):
         when = datetime.datetime.strptime(stamp[:10], "%Y-%m-%d")
     except ValueError:
         return None
-    return (datetime.datetime.utcnow() - when).days
+    when = when.replace(tzinfo=datetime.timezone.utc)
+    return (datetime.datetime.now(datetime.timezone.utc) - when).days
 
 
 def row(app):
