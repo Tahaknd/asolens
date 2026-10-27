@@ -71,3 +71,30 @@ class LabelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SubtitleFallbackTests(unittest.TestCase):
+    """Apple puts the genre in the subtitle slot when an app has no subtitle."""
+
+    def test_a_subtitle_equal_to_the_category_is_treated_as_absent(self):
+        self.assertIsNone(
+            ios_store.subtitle_or_none("Lifestyle", ["Lifestyle", "Shopping"]))
+
+    def test_comparison_ignores_case_and_padding(self):
+        self.assertIsNone(
+            ios_store.subtitle_or_none("  lifestyle ", ["Lifestyle"]))
+
+    def test_a_real_subtitle_is_kept(self):
+        self.assertEqual(
+            ios_store.subtitle_or_none("Çeyiz defteri ve bütçe", ["Lifestyle"]),
+            "Çeyiz defteri ve bütçe")
+
+    def test_a_subtitle_merely_containing_the_category_is_kept(self):
+        self.assertEqual(
+            ios_store.subtitle_or_none("Lifestyle planner for two", ["Lifestyle"]),
+            "Lifestyle planner for two")
+
+    def test_empty_and_missing_inputs(self):
+        self.assertIsNone(ios_store.subtitle_or_none(None, ["Lifestyle"]))
+        self.assertIsNone(ios_store.subtitle_or_none("", ["Lifestyle"]))
+        self.assertEqual(ios_store.subtitle_or_none("Real one", None), "Real one")

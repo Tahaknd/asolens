@@ -179,6 +179,23 @@ def reviews(app_id, country="us", pages=REVIEW_PAGES, ttl=3600):
     return found
 
 
+def subtitle_or_none(subtitle, genres):
+    """Drop a "subtitle" that is really the category name.
+
+    An app with no subtitle still gets a populated `subtitle` field on the
+    product page: Apple falls back to the genre. Taking that at face value
+    turns a missing subtitle — the second most heavily indexed field on iOS —
+    into a merely short one, and feeds the category word into the keyword
+    surface as if the developer had chosen it.
+    """
+    if not subtitle:
+        return None
+    normalised = subtitle.strip().casefold()
+    if any(normalised == (genre or "").strip().casefold() for genre in genres or ()):
+        return None
+    return subtitle
+
+
 def _label(node):
     if isinstance(node, dict):
         return node.get("label") or ""
@@ -194,7 +211,7 @@ def fetch_app(app_id, country="us", review_countries=(), review_pages=REVIEW_PAG
         "id": str(record.get("trackId")),
         "country": country,
         "name": record.get("trackName"),
-        "subtitle": extras["subtitle"],
+        "subtitle": subtitle_or_none(extras["subtitle"], record.get("genres")),
         "bundle_id": record.get("bundleId"),
         "developer": record.get("artistName"),
         "seller_url": record.get("sellerUrl"),
