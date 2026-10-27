@@ -62,6 +62,9 @@ class Finding:
         self.weight = weight
         self.evidence = evidence
 
+    def __repr__(self):
+        return "<Finding %s %s: %s>" % (self.severity, self.check, self.title)
+
     @property
     def lost(self):
         return 0 if self.severity == OK else self.weight

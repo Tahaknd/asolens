@@ -6,8 +6,18 @@ shaped exactly like `ios_store.fetch_app` returns.
 
 DEFAULT_DESCRIPTION = (
     "Track every expense in seconds and save more each month.\n\n"
-    "Budgets, recurring bills and shared wallets, all offline-first. "
-    "Create a plan, scan a receipt and find where the money went."
+    "Centsible keeps budgets, recurring bills and shared wallets in one "
+    "place, and every one of them works offline first. Scan a receipt and "
+    "the amount, merchant and category are filled in before you put your "
+    "phone down.\n\n"
+    "Set a monthly plan per category and watch the remaining balance move "
+    "as you spend. Recurring bills are detected from your own history "
+    "rather than typed in by hand, so a rent increase or a cancelled "
+    "subscription shows up on its own.\n\n"
+    "Share a wallet with a partner or a flatmate. Everyone adds entries "
+    "from their own phone, the ledger reconciles when the devices next "
+    "meet, and nobody has to settle up from memory at the end of the "
+    "month."
 )
 
 

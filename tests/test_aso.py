@@ -1,0 +1,156 @@
+import unittest
+
+from asolens import aso
+from tests.support import days_ago, find, make_app
+
+
+class HealthyAppTests(unittest.TestCase):
+    def test_a_well_formed_listing_scores_full_marks(self):
+        findings = aso.audit(make_app())
+        failed = [f for f in findings if f.severity in (aso.CRITICAL, aso.WARN)]
+        self.assertEqual(failed, [], "unexpected findings: %s" % [f.check for f in failed])
+        self.assertEqual(aso.score(findings), 100)
+
+    def test_score_never_goes_below_zero(self):
+        broken = make_app(
+            name="x" * 40, subtitle=None, description="", release_notes="",
+            version_released=days_ago(900), screenshots=[], ipad_screenshots=[],
+            languages=["EN"], size_bytes=900 * 1048576, rating_count=3,
+            rating_counts={5: 0, 4: 0, 3: 0, 2: 0, 1: 3}, icon_url=None,
+        )
+        self.assertGreaterEqual(aso.score(aso.audit(broken)), 0)
+
+
+class TitleTests(unittest.TestCase):
+    def test_title_over_thirty_characters_is_critical(self):
+        finding = find(aso.audit(make_app(name="A" * 31)), "title.length")
+        self.assertEqual(finding.severity, aso.CRITICAL)
+
+    def test_title_at_the_limit_passes(self):
+        finding = find(aso.audit(make_app(name="A" * 30)), "title.length")
+        self.assertEqual(finding.severity, aso.OK)
+
+    def test_brand_only_title_is_flagged(self):
+        finding = find(aso.audit(make_app(name="Centsible")), "title.keyword")
+        self.assertEqual(finding.severity, aso.WARN)
+
+
+class SubtitleTests(unittest.TestCase):
+    def test_missing_subtitle_is_critical(self):
+        findings = aso.audit(make_app(subtitle=None))
+        self.assertEqual(find(findings, "subtitle.present").severity, aso.CRITICAL)
+
+    def test_short_subtitle_wastes_indexed_surface(self):
+        finding = find(aso.audit(make_app(subtitle="Budgets")), "subtitle.length")
+        self.assertEqual(finding.severity, aso.WARN)
+
+    def test_words_shared_with_the_title_are_flagged(self):
+        findings = aso.audit(
+            make_app(name="Centsible Budget", subtitle="Budget tracker for teams"))
+        finding = find(findings, "subtitle.overlap")
+        self.assertEqual(finding.severity, aso.WARN)
+        self.assertIn("budget", finding.evidence)
+
+    def test_distinct_wording_passes(self):
+        finding = find(aso.audit(make_app()), "subtitle.overlap")
+        self.assertEqual(finding.severity, aso.OK)
+
+
+class DescriptionTests(unittest.TestCase):
+    def test_fold_without_a_benefit_phrase_is_flagged(self):
+        app = make_app(description="Centsible is an application. " * 12)
+        self.assertEqual(find(aso.audit(app), "description.hook").severity, aso.WARN)
+
+    def test_repeated_term_is_reported_as_stuffing(self):
+        app = make_app(description=("budget " * 40) + "and more besides here")
+        finding = find(aso.audit(app), "description.stuffing")
+        self.assertEqual(finding.severity, aso.WARN)
+
+    def test_normal_prose_is_not_stuffing(self):
+        self.assertEqual(
+            find(aso.audit(make_app()), "description.stuffing").severity, aso.OK)
+
+
+class ReleaseTests(unittest.TestCase):
+    def test_boilerplate_release_notes_are_flagged(self):
+        app = make_app(release_notes="Bug fixes and performance improvements.")
+        self.assertEqual(find(aso.audit(app), "release.notes").severity, aso.WARN)
+
+    def test_turkish_boilerplate_is_flagged_too(self):
+        app = make_app(release_notes="Küçük hata düzeltmeleri.")
+        self.assertEqual(find(aso.audit(app), "release.notes").severity, aso.WARN)
+
+    def test_a_long_specific_note_passes_even_if_it_mentions_bug_fixes(self):
+        app = make_app(release_notes=(
+            "Shared wallets reconcile correctly after a long offline stretch, "
+            "the receipt scanner no longer rotates portrait photos, and we "
+            "fixed the crash some of you hit when editing a recurring bill "
+            "whose category had been deleted. Bug fixes and performance "
+            "improvements throughout the sync engine."))
+        self.assertEqual(find(aso.audit(app), "release.notes").severity, aso.OK)
+
+    def test_update_cadence_thresholds(self):
+        self.assertEqual(
+            find(aso.audit(make_app(version_released=days_ago(30))),
+                 "release.cadence").severity, aso.OK)
+        self.assertEqual(
+            find(aso.audit(make_app(version_released=days_ago(120))),
+                 "release.cadence").severity, aso.WARN)
+        self.assertEqual(
+            find(aso.audit(make_app(version_released=days_ago(400))),
+                 "release.cadence").severity, aso.CRITICAL)
+
+
+class CreativeTests(unittest.TestCase):
+    def test_too_few_screenshots_is_critical(self):
+        app = make_app(screenshots=["https://example.com/1.png"] * 2)
+        self.assertEqual(find(aso.audit(app), "creative.count").severity, aso.CRITICAL)
+
+    def test_ipad_capable_app_without_ipad_screenshots(self):
+        app = make_app(ipad_screenshots=[])
+        self.assertEqual(find(aso.audit(app), "creative.ipad").severity, aso.WARN)
+
+    def test_iphone_only_app_is_not_asked_for_ipad_screenshots(self):
+        app = make_app(features=[], ipad_screenshots=[])
+        self.assertIsNone(find(aso.audit(app), "creative.ipad"))
+
+
+class ReachAndRatingTests(unittest.TestCase):
+    def test_single_language_is_flagged(self):
+        self.assertEqual(
+            find(aso.audit(make_app(languages=["EN"])), "reach.localization").severity,
+            aso.WARN)
+
+    def test_large_download_is_flagged(self):
+        app = make_app(size_bytes=420 * 1048576)
+        self.assertEqual(find(aso.audit(app), "reach.size").severity, aso.WARN)
+
+    def test_low_rating_volume_is_flagged(self):
+        self.assertEqual(
+            find(aso.audit(make_app(rating_count=12)), "ratings.volume").severity,
+            aso.WARN)
+
+    def test_one_star_share_thresholds(self):
+        heavy = make_app(rating_counts={5: 50, 4: 10, 3: 10, 2: 10, 1: 120})
+        self.assertEqual(find(aso.audit(heavy), "ratings.one_star").severity,
+                         aso.CRITICAL)
+        middling = make_app(rating_counts={5: 700, 4: 100, 3: 50, 2: 50, 1: 180})
+        self.assertEqual(find(aso.audit(middling), "ratings.one_star").severity,
+                         aso.WARN)
+
+    def test_histogram_absent_means_no_finding(self):
+        self.assertIsNone(find(aso.audit(make_app(rating_counts=None)),
+                               "ratings.one_star"))
+
+
+class TokenisingTests(unittest.TestCase):
+    def test_turkish_characters_survive_tokenisation(self):
+        self.assertEqual(aso.tokens("Çöp Kutusu şişman"), ["çöp", "kutusu", "şişman"])
+
+    def test_stopwords_and_short_words_are_dropped(self):
+        self.assertEqual(aso.content_tokens("the app is a budget tool"),
+                         ["budget", "tool"])
+
+
+if __name__ == "__main__":
+    unittest.main()
