@@ -98,3 +98,54 @@ class CacheKeyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CacheManagementTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile, shutil
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+        patcher = mock.patch.object(net, "CACHE_DIR", self.dir)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def write(self, name, body=b"x" * 100, age_days=0):
+        import os, time
+        path = os.path.join(self.dir, name)
+        with open(path, "wb") as fh:
+            fh.write(body)
+        if age_days:
+            old = time.time() - age_days * 86400
+            os.utime(path, (old, old))
+        return path
+
+    def test_stats_counts_entries_and_bytes(self):
+        self.write("a"), self.write("b")
+        stats = net.cache_stats()
+        self.assertEqual(stats["entries"], 2)
+        self.assertEqual(stats["bytes"], 200)
+
+    def test_stats_on_a_missing_directory(self):
+        import shutil
+        shutil.rmtree(self.dir)
+        self.assertEqual(net.cache_stats(),
+                         {"entries": 0, "bytes": 0, "oldest_days": None})
+
+    def test_oldest_age_is_reported(self):
+        self.write("old", age_days=5)
+        self.write("new")
+        self.assertAlmostEqual(net.cache_stats()["oldest_days"], 5.0, places=0)
+
+    def test_clear_removes_everything(self):
+        self.write("a"), self.write("b")
+        removed, freed = net.cache_clear()
+        self.assertEqual(removed, 2)
+        self.assertEqual(freed, 200)
+        self.assertEqual(net.cache_stats()["entries"], 0)
+
+    def test_prune_keeps_recent_entries(self):
+        self.write("old", age_days=30)
+        self.write("fresh")
+        removed, _ = net.cache_clear(older_than_days=7)
+        self.assertEqual(removed, 1)
+        self.assertEqual(net.cache_stats()["entries"], 1)

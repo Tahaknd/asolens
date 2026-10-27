@@ -6,7 +6,8 @@ import platform
 import sys
 import webbrowser
 
-from asolens import __version__, aso, assets, compare, deeplinks, ios_store, report, reviews
+from asolens import (
+    __version__, aso, assets, compare, deeplinks, ios_store, net, report, reviews)
 from asolens.aso import CRITICAL, WARN
 from asolens.util import human_size, wrap
 
@@ -52,6 +53,13 @@ def build_parser():
     crawl.add_argument("--steps", type=int, default=6)
     crawl.add_argument("--out", "-o", default=None)
     crawl.add_argument("--no-color", action="store_true")
+
+    cache = subparsers.add_parser(
+        "cache", help="Önbelleği görüntüle veya temizle")
+    cache.add_argument("--clear", action="store_true",
+                       help="Tüm önbelleği sil")
+    cache.add_argument("--prune", type=float, metavar="GÜN",
+                       help="Yalnızca bu günden eski girdileri sil")
     return parser
 
 
@@ -59,7 +67,32 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     if args.command == "analyze":
         return cmd_analyze(args)
+    if args.command == "cache":
+        return cmd_cache(args)
     return cmd_crawl(args)
+
+
+def cmd_cache(args):
+    if args.clear or args.prune is not None:
+        removed, freed = net.cache_clear(
+            None if args.clear else args.prune)
+        print("  %d girdi silindi, %s boşaldı." % (removed, human_size(freed)))
+        if args.clear and args.prune is not None:
+            print("  (--clear verildiği için --prune yok sayıldı.)")
+        return 0
+
+    stats = net.cache_stats()
+    print("")
+    print("  Konum : %s" % net.CACHE_DIR)
+    print("  Girdi : %d" % stats["entries"])
+    print("  Boyut : %s" % human_size(stats["bytes"]))
+    print("  En eski: %s" % (
+        "%s gün" % stats["oldest_days"] if stats["oldest_days"] is not None else "—"))
+    print("")
+    print("  Temizlemek için: asolens cache --clear")
+    print("  Eskileri atmak için: asolens cache --prune 7")
+    print("")
+    return 0
 
 
 def cmd_analyze(args):

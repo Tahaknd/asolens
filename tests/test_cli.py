@@ -116,6 +116,29 @@ class AnalyzeTests(unittest.TestCase):
         self.assertIn("not found", output)
 
 
+class CacheCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+        patcher = mock.patch.object(net, "CACHE_DIR", self.dir)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        with open(os.path.join(self.dir, "entry"), "wb") as fh:
+            fh.write(b"x" * 2048)
+
+    def test_reports_size_and_location(self):
+        code, output = run(["cache"])
+        self.assertEqual(code, 0)
+        self.assertIn("2 KB", output)
+        self.assertIn(self.dir, output)
+
+    def test_clear_empties_it(self):
+        code, output = run(["cache", "--clear"])
+        self.assertEqual(code, 0)
+        self.assertIn("1 girdi silindi", output)
+        self.assertEqual(os.listdir(self.dir), [])
+
+
 class CrawlTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

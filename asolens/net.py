@@ -142,3 +142,50 @@ def download(url, dest, ttl=86400):
     with open(dest, "wb") as fh:
         fh.write(get(url, ttl=ttl, binary=True))
     return dest
+
+
+def cache_stats():
+    """Entry count, total bytes and age of the oldest entry on disk."""
+    if not os.path.isdir(CACHE_DIR):
+        return {"entries": 0, "bytes": 0, "oldest_days": None}
+    entries, total, oldest = 0, 0, None
+    now = time.time()
+    for name in os.listdir(CACHE_DIR):
+        path = os.path.join(CACHE_DIR, name)
+        try:
+            stat = os.stat(path)
+        except OSError:
+            continue
+        if not os.path.isfile(path):
+            continue
+        entries += 1
+        total += stat.st_size
+        age = (now - stat.st_mtime) / 86400.0
+        oldest = age if oldest is None else max(oldest, age)
+    return {"entries": entries, "bytes": total,
+            "oldest_days": None if oldest is None else round(oldest, 1)}
+
+
+def cache_clear(older_than_days=None):
+    """Delete cache entries, optionally only those past a given age.
+
+    Returns the number of files removed and the bytes reclaimed.
+    """
+    if not os.path.isdir(CACHE_DIR):
+        return 0, 0
+    cutoff = None if older_than_days is None else time.time() - older_than_days * 86400
+    removed, freed = 0, 0
+    for name in os.listdir(CACHE_DIR):
+        path = os.path.join(CACHE_DIR, name)
+        try:
+            stat = os.stat(path)
+            if not os.path.isfile(path):
+                continue
+            if cutoff is not None and stat.st_mtime >= cutoff:
+                continue
+            os.unlink(path)
+        except OSError:
+            continue
+        removed += 1
+        freed += stat.st_size
+    return removed, freed
