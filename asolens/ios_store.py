@@ -8,6 +8,7 @@ Three sources are combined, because none of them is complete on its own:
 * the customer-reviews RSS feed — up to ~500 recent reviews per country
 """
 
+import hashlib
 import json
 import re
 import urllib.parse
@@ -23,6 +24,16 @@ REVIEWS = (
 )
 
 REVIEW_PAGES = 10  # Apple caps the feed at 10 pages of 50
+
+# Storefronts probed to tell whether the App Store *listing* is localized.
+# The listing (name, subtitle, description) is localized in App Store Connect
+# and is a different thing from the languages the binary ships, which is what
+# languageCodesISO2A reports. An app can support 39 languages and still show
+# English copy in every storefront.
+PROBE_STOREFRONTS = (
+    "us", "gb", "de", "fr", "es", "it", "nl", "pl",
+    "tr", "ru", "br", "mx", "jp", "kr", "cn", "in", "id", "sa",
+)
 
 
 APPLE_HOSTS = ("apps.apple.com", "itunes.apple.com", "music.apple.com")
@@ -196,6 +207,62 @@ def subtitle_or_none(subtitle, genres):
     return subtitle
 
 
+def storefront_survey(app_id, storefronts=PROBE_STOREFRONTS, ttl=3600):
+    """One lookup per storefront, answering two questions at once.
+
+    * Is the listing localized? The Lookup API does not publish the set of
+      App Store Connect localizations, but it serves each storefront the copy
+      that storefront shows, so distinct texts count the localizations
+      directly.
+    * Where are this app's users? userRatingCount is per storefront and varies
+      by orders of magnitude, which is the signal for choosing where to read
+      reviews.
+
+    Both come from the same requests, so the survey costs nothing extra.
+    """
+    def probe(code):
+        try:
+            record = lookup(app_id, country=code, ttl=ttl)
+        except Exception:
+            return code, None, 0
+        text = "%s\u0000%s\u0000%s" % (
+            record.get("trackName") or "",
+            record.get("description") or "",
+            record.get("releaseNotes") or "")
+        digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+        return code, digest, int(record.get("userRatingCount") or 0)
+
+    results = parallel_map(probe, storefronts)
+    available, ratings, variants = [], {}, {}
+    for code, digest, count in results:
+        if not digest:
+            continue
+        available.append(code)
+        ratings[code] = count
+        variants.setdefault(digest, []).append(code)
+    return {
+        "probed": list(storefronts),
+        "available_in": sorted(available),
+        "ratings": ratings,
+        "by_variant": {d: sorted(c) for d, c in variants.items()},
+        "distinct": len(variants),
+    }
+
+
+def rank_review_markets(survey, preferred=None, limit=3):
+    """Storefronts worth reading reviews from, busiest first.
+
+    The storefront the caller named is pinned to the front when the app sells
+    there: it is the market they asked about, whatever the global numbers say.
+    """
+    available = (survey or {}).get("available_in") or []
+    ratings = (survey or {}).get("ratings") or {}
+    ranked = sorted(available, key=lambda c: ratings.get(c, 0), reverse=True)
+    if preferred in ranked:
+        ranked = [preferred] + [c for c in ranked if c != preferred]
+    return ranked[:limit]
+
+
 def _label(node):
     if isinstance(node, dict):
         return node.get("label") or ""
@@ -203,7 +270,8 @@ def _label(node):
 
 
 def fetch_app(app_id, country="us", review_countries=(), review_pages=REVIEW_PAGES,
-              ttl=3600, with_reviews=True):
+              ttl=3600, with_reviews=True, with_localization=True,
+              review_markets=3):
     """Assemble one app's full profile from every source."""
     record = lookup(app_id, country=country, ttl=ttl)
     extras = page_extras(app_id, country=country, ttl=ttl)
@@ -238,10 +306,22 @@ def fetch_app(app_id, country="us", review_countries=(), review_pages=REVIEW_PAG
         "privacy_types": extras["privacy_types"],
         "similar_apps": extras["similar_apps"],
         "editors_choice": extras["editorial_badge"],
+        "localization": None,
+        "review_markets": [],
         "reviews": [],
     }
+    if with_localization:
+        profile["localization"] = storefront_survey(app_id, ttl=ttl)
     if with_reviews:
-        countries = list(review_countries) or [country]
+        countries = list(review_countries)
+        if not countries:
+            # Reviews are per storefront. Reading only the one the caller
+            # happened to name reports a handful of reviews for an app whose
+            # audience is elsewhere, with nothing to say that is what happened.
+            countries = rank_review_markets(
+                profile["localization"], preferred=country,
+                limit=review_markets) or [country]
+        profile["review_markets"] = countries
         batches = parallel_map(
             lambda code: reviews(app_id, country=code, pages=review_pages, ttl=ttl),
             countries)

@@ -116,10 +116,44 @@ class CreativeTests(unittest.TestCase):
 
 
 class ReachAndRatingTests(unittest.TestCase):
-    def test_single_language_is_flagged(self):
+    def test_binary_languages_are_reported_without_penalty(self):
+        """languageCodesISO2A describes the binary, not the listing."""
+        finding = find(aso.audit(make_app(languages=["EN"])), "reach.app_languages")
+        self.assertEqual(finding.severity, aso.INFO)
+        self.assertEqual(finding.weight, 0)
+
+    def test_a_multilingual_binary_does_not_excuse_an_unlocalized_listing(self):
+        """Regression: 15 listing localizations were reported as "one language"
+        because the check read the binary's language list instead."""
+        app = make_app(
+            languages=["EN"],
+            localization={
+                "probed": ["us", "de", "tr"],
+                "available_in": ["us", "de", "tr"],
+                "ratings": {"us": 100, "de": 80, "tr": 60},
+                "by_variant": {"same": ["us", "de", "tr"]},
+                "distinct": 1,
+            })
         self.assertEqual(
-            find(aso.audit(make_app(languages=["EN"])), "reach.localization").severity,
-            aso.WARN)
+            find(aso.audit(app), "reach.listing_localization").severity, aso.WARN)
+
+    def test_a_localized_listing_passes_even_with_a_single_language_binary(self):
+        app = make_app(
+            languages=["EN"],
+            localization={
+                "probed": ["us", "de", "tr"],
+                "available_in": ["us", "de", "tr"],
+                "ratings": {"us": 100, "de": 80, "tr": 60},
+                "by_variant": {"en": ["us"], "de": ["de"], "tr": ["tr"]},
+                "distinct": 3,
+            })
+        self.assertEqual(
+            find(aso.audit(app), "reach.listing_localization").severity, aso.OK)
+
+    def test_a_single_market_app_is_not_asked_to_localize(self):
+        finding = find(aso.audit(make_app()), "reach.listing_localization")
+        self.assertEqual(finding.severity, aso.INFO)
+        self.assertEqual(finding.weight, 0)
 
     def test_large_download_is_flagged(self):
         app = make_app(size_bytes=420 * 1048576)

@@ -106,7 +106,7 @@ def summarize(reviews):
     if not reviews:
         return {
             "total": 0, "average": None, "histogram": {}, "themes": [],
-            "by_version": [], "negative": 0, "quotes": {},
+            "by_version": [], "negative": 0, "quotes": {}, "markets": [],
         }
 
     hist = collections.Counter(r["rating"] for r in reviews)
@@ -159,7 +159,9 @@ def summarize(reviews):
         reverse=True,
     )
 
+    markets = collections.Counter(r["country"] for r in reviews)
     return {
+        "markets": [(c, n) for c, n in markets.most_common()],
         "total": len(reviews),
         "average": sum(r["rating"] for r in reviews) / len(reviews),
         "histogram": {k: hist.get(k, 0) for k in range(5, 0, -1)},

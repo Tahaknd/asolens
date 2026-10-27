@@ -54,6 +54,11 @@ def make_app(**overrides):
         "privacy_types": [],
         "similar_apps": [],
         "editors_choice": False,
+        "localization": {
+            "probed": ["us"], "available_in": ["us"], "ratings": {"us": 5400},
+            "by_variant": {"abc": ["us"]}, "distinct": 1,
+        },
+        "review_markets": ["us"],
         "reviews": [],
     }
     app.update(overrides)

@@ -29,7 +29,15 @@ def build_parser():
                          help="Mağaza ülkesi (varsayılan: URL'den, yoksa us)")
     analyze.add_argument("--review-country", action="append", default=[],
                          metavar="KOD",
-                         help="Yorum çekilecek ülke; birden çok kez verilebilir")
+                         help="Yorum çekilecek ülkeyi elle belirle; birden çok "
+                              "kez verilebilir. Verilmezse en çok oy alan "
+                              "mağazalar otomatik seçilir.")
+    analyze.add_argument("--review-markets", type=int, default=3, metavar="N",
+                         help="Otomatik seçimde kaç mağazadan yorum okunacak "
+                              "(varsayılan 3)")
+    analyze.add_argument("--no-localization", action="store_true",
+                         help="Mağaza taramasını atla (daha hızlı, ama yorumlar "
+                              "yalnızca --country mağazasından okunur)")
     analyze.add_argument("--review-pages", type=int, default=4, metavar="N",
                          help="Ülke başına yorum sayfası, 50 yorum/sayfa (varsayılan 4, üst sınır 10)")
     analyze.add_argument("--compare", nargs="*", default=None, metavar="APP",
@@ -118,6 +126,8 @@ def cmd_analyze(args):
             review_pages=review_pages,
             ttl=ttl,
             with_reviews=not args.no_reviews,
+            with_localization=not args.no_localization,
+            review_markets=max(1, args.review_markets),
         )
     except Exception as exc:
         print("Hata: %s" % exc, file=sys.stderr)
@@ -135,7 +145,9 @@ def cmd_analyze(args):
     }
 
     if app["reviews"]:
-        print("· %d yorum analiz ediliyor…" % len(app["reviews"]))
+        markets = app.get("review_markets") or [country]
+        print("· %s mağazasından %d yorum analiz ediliyor…" % (
+            "/".join(c.upper() for c in markets), len(app["reviews"])))
         result["reviews"] = reviews.summarize(app["reviews"])
         brief = os.path.join(out_dir, "reviews-brief.md")
         with open(brief, "w", encoding="utf-8") as fh:

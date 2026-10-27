@@ -98,3 +98,38 @@ class SubtitleFallbackTests(unittest.TestCase):
         self.assertIsNone(ios_store.subtitle_or_none(None, ["Lifestyle"]))
         self.assertIsNone(ios_store.subtitle_or_none("", ["Lifestyle"]))
         self.assertEqual(ios_store.subtitle_or_none("Real one", None), "Real one")
+
+
+class ReviewMarketTests(unittest.TestCase):
+    """Reviews are per storefront; reading only one misses the audience."""
+
+    SURVEY = {
+        "available_in": ["br", "de", "tr", "us"],
+        "ratings": {"us": 29_000_000, "br": 11_000_000, "de": 2_400_000,
+                    "tr": 3_600_000},
+        "by_variant": {}, "distinct": 4, "probed": [],
+    }
+
+    def test_busiest_storefronts_are_chosen(self):
+        self.assertEqual(
+            ios_store.rank_review_markets(self.SURVEY, limit=3),
+            ["us", "br", "tr"])
+
+    def test_the_requested_storefront_is_pinned_first(self):
+        """Asking about the TR store must read the TR store, whatever the
+        global numbers say."""
+        self.assertEqual(
+            ios_store.rank_review_markets(self.SURVEY, preferred="de", limit=3),
+            ["de", "us", "br"])
+
+    def test_a_storefront_the_app_is_absent_from_is_not_pinned(self):
+        self.assertEqual(
+            ios_store.rank_review_markets(self.SURVEY, preferred="jp", limit=2),
+            ["us", "br"])
+
+    def test_limit_is_respected(self):
+        self.assertEqual(len(ios_store.rank_review_markets(self.SURVEY, limit=1)), 1)
+
+    def test_an_empty_survey_yields_nothing_to_rank(self):
+        self.assertEqual(ios_store.rank_review_markets(None), [])
+        self.assertEqual(ios_store.rank_review_markets({}), [])

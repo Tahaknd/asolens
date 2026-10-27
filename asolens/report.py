@@ -60,6 +60,10 @@ def console(result, color=True):
     if summary and summary["total"]:
         lines.append("  Yorum temaları (%d olumsuz / %d yorum)" % (
             summary["negative"], summary["total"]))
+        if summary.get("markets"):
+            lines.append("  Kaynak mağazalar: %s" % ", ".join(
+                "%s (%d)" % (code.upper(), count)
+                for code, count in summary["markets"]))
         for theme in summary["themes"][:6]:
             bar = "█" * max(1, int(theme["share"] * 24))
             lines.append("    %-26s %-24s %3d" % (theme["label"], bar, theme["count"]))
@@ -331,6 +335,12 @@ def html_report(result, out_dir):
 
     summary = result.get("reviews")
     if summary and summary["total"]:
+        if summary.get("markets"):
+            body += ['<p class="meta">Yorumlar şu mağazalardan okundu: %s. '
+                     'Yorumlar mağaza bazlı tutulur; burada listelenmeyen '
+                     'mağazalardaki yorumlar bu analize girmiyor.</p>' % _esc(
+                         ", ".join("%s (%d)" % (c.upper(), n)
+                                   for c, n in summary["markets"]))]
         body += ["<h2>Yorum temaları</h2>", _themes(summary),
                  "<h2>Sürüme göre yorumlar</h2>", _versions(summary)]
 

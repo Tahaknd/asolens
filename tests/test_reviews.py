@@ -45,6 +45,16 @@ class ThemeMatchingTests(unittest.TestCase):
 
 
 class SummaryTests(unittest.TestCase):
+    def test_the_storefront_split_is_reported(self):
+        """Output must say where the reviews came from, so a thin result is
+        recognisable as "wrong storefront" rather than "few complaints"."""
+        summary = reviews.summarize([
+            make_review(rating=1, country="tr"),
+            make_review(rating=1, country="tr"),
+            make_review(rating=2, country="us"),
+        ])
+        self.assertEqual(summary["markets"], [("tr", 2), ("us", 1)])
+
     def test_empty_input_returns_an_empty_shape(self):
         summary = reviews.summarize([])
         self.assertEqual(summary["total"], 0)

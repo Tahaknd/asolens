@@ -300,16 +300,52 @@ def _check_creative(app):
 
 def _check_reach(app):
     out = []
+    # Two different things, routinely confused. languageCodesISO2A describes
+    # the binary; the App Store Connect listing is localized separately and is
+    # what a visitor actually reads. An app can ship 39 languages and still
+    # show English copy in every storefront.
     langs = app.get("languages") or []
     if len(langs) <= 1:
         out.append(Finding(
-            "reach.localization", WARN, "Tek dilde yayında (%s)" % (", ".join(langs) or "?"),
-            "Store metinlerini lokalize etmek, ürünü çevirmeden bile o dildeki "
-            "aramalarda görünmeyi sağlıyor.", 6, langs))
+            "reach.app_languages", INFO,
+            "Uygulama arayüzü tek dilde (%s)" % (", ".join(langs) or "?"),
+            "Bu, binary'nin desteklediği dil listesi — mağaza metinlerinden "
+            "ayrı bir şey. Arayüzü çevirmek o pazarlarda elde tutmayı artırır.",
+            0, langs))
     else:
         out.append(Finding(
-            "reach.localization", OK, "%d dilde yayında" % len(langs),
-            ", ".join(langs[:12]) + ("…" if len(langs) > 12 else ""), 6, langs))
+            "reach.app_languages", OK,
+            "Uygulama arayüzü %d dilde" % len(langs),
+            ", ".join(langs[:12]) + ("…" if len(langs) > 12 else ""), 0, langs))
+
+    local = app.get("localization")
+    if local and local.get("available_in"):
+        markets = len(local["available_in"])
+        distinct = local.get("distinct") or 0
+        if markets > 1 and distinct <= 1:
+            out.append(Finding(
+                "reach.listing_localization", WARN,
+                "%d mağazada satışta ama liste metni tek dilde" % markets,
+                "Ad, subtitle ve açıklama her mağazada aynı metni gösteriyor. "
+                "Liste metnini lokalize etmek, ürünü çevirmeden bile o dildeki "
+                "aramalarda görünmeyi sağlıyor — indekslenen alanlar dile göre "
+                "ayrı ayrı değerlendiriliyor.", 6, local["available_in"]))
+        elif markets > 1:
+            fallback = max(local["by_variant"].values(), key=len)
+            detail = "%d mağazada satışta, %d farklı metin." % (markets, distinct)
+            if len(fallback) > 1:
+                detail += (" Aynı metni paylaşan ve muhtemelen lokalize "
+                           "edilmemiş olanlar: %s." % ", ".join(
+                               c.upper() for c in fallback))
+            out.append(Finding(
+                "reach.listing_localization", OK,
+                "Liste metni %d dilde" % distinct, detail, 6, local["by_variant"]))
+        else:
+            out.append(Finding(
+                "reach.listing_localization", INFO,
+                "Yalnızca %s mağazasında satışta" % local["available_in"][0].upper(),
+                "Tek pazarda olduğu için liste lokalizasyonu şu an gereksiz.",
+                0, local["available_in"]))
 
     size_mb = (app.get("size_bytes") or 0) / 1048576.0
     if size_mb > 200:
