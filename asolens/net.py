@@ -83,10 +83,16 @@ def _fetch_with_retries(req, url, timeout):
                     raw = gzip.decompress(raw)
                 return raw
         except urllib.error.HTTPError as exc:
+            # HTTPError carries the response body, so it holds a live
+            # connection until it is closed or collected. Read what we need
+            # from it first, then close it.
             last = FetchError("HTTP %s for %s" % (exc.code, url))
-            if exc.code not in RETRY_STATUSES:
+            retryable = exc.code in RETRY_STATUSES
+            delay = (_retry_after(exc) or _backoff(attempt)) if retryable else 0
+            with contextlib.suppress(Exception):
+                exc.close()
+            if not retryable:
                 raise last from exc
-            delay = _retry_after(exc) or _backoff(attempt)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last = FetchError("%s for %s" % (exc, url))
             delay = _backoff(attempt)

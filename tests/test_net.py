@@ -79,6 +79,12 @@ class RetryTests(unittest.TestCase):
         self.assertTrue(all(d <= net.BACKOFF_CAP * 1.5 for d in delays))
         self.assertLess(delays[0], delays[-1])
 
+    def test_a_failed_response_is_closed_not_left_to_the_collector(self):
+        """HTTPError holds the live connection until it is closed."""
+        error = http_error(503)
+        self.fetch([error, FakeResponse(b"ok")])
+        self.assertTrue(error.fp.closed)
+
     def test_gzip_bodies_are_decompressed(self):
         import gzip
         packed = gzip.compress(b"hello")
