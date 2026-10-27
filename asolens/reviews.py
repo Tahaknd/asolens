@@ -84,6 +84,23 @@ THEMES = {
 NEGATIVE_MAX = 3  # ratings at or below this count as complaints
 
 
+def _matcher(terms):
+    """Compile a theme's terms into one left-anchored pattern.
+
+    Matching is anchored at a word start but deliberately left open at the
+    end. A plain substring test counts "downloads", "roads" and "uploads" as
+    the "ads" theme, which corrupts the headline numbers; anchoring both ends
+    would instead break Turkish, where the language is agglutinative and
+    "çöküyor" legitimately appears as "çöküyordu" or "çöküyorum". A left
+    anchor is the only form that satisfies both.
+    """
+    return re.compile(
+        "|".join(r"\b" + re.escape(term) for term in terms), re.IGNORECASE)
+
+
+THEME_MATCHERS = {key: _matcher(spec["terms"]) for key, spec in THEMES.items()}
+
+
 def summarize(reviews):
     """Aggregate ratings, themes and version signal from a review list."""
     if not reviews:
@@ -99,8 +116,8 @@ def summarize(reviews):
     theme_quotes = collections.defaultdict(list)
     for review in negatives:
         text = ("%s %s" % (review["title"], review["body"])).lower()
-        for key, spec in THEMES.items():
-            if any(term in text for term in spec["terms"]):
+        for key, matcher in THEME_MATCHERS.items():
+            if matcher.search(text):
                 theme_hits[key] += 1
                 if len(theme_quotes[key]) < 3:
                     theme_quotes[key].append({
