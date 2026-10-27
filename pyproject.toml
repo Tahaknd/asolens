@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asolens"
+version = "0.1.0"
+description = "Local App Store Optimization auditor and iOS bundle checker. No API keys, no dependencies."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Taha Çalışkan" }]
+keywords = ["aso", "app-store-optimization", "ios", "app-store", "mobile", "audit", "universal-links"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.scripts]
+asolens = "asolens.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["asolens*"]
