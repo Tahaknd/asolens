@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor declared in pyproject.toml, a middle version, and current.
+        python-version: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Byte-compile every module
+        run: python -m compileall -q asolens tests
+
+      - name: Run the test suite
+        # The suite never touches the network, so no secrets or allowances
+        # are needed here.
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Check the CLI starts
+        run: |
+          python -m asolens --version
+          python -m asolens --help
+          python -m asolens analyze --help
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install from the project metadata
+        run: pip install .
+      - name: The installed console script works
+        run: asolens --version
