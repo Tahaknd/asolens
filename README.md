@@ -126,6 +126,9 @@ countries is the only way past a single market.
 
 ```
 --no-reviews     skip reviews entirely (fast run)
+--review-markets N   how many storefronts to read reviews from (default 3)
+--no-localization    skip the storefront survey (faster; reviews then
+                     come only from --country)
 --no-assets      do not download images
 --fresh          bypass the cache
 --json           also write report.json
@@ -199,6 +202,34 @@ asolens uses it automatically and records the element tree with each frame.
   `vision-brief.md`.
 - **No Google Play yet.** The structure is platform-agnostic, but only the App
   Store client is written.
+
+## One app, many storefronts
+
+The App Store is not one catalogue. An audit of the Lookup API across
+storefronts found these fields differ per storefront, and these do not:
+
+| Varies by storefront | Global |
+|---|---|
+| Listing text (name, description, release notes) | Version and release date |
+| Screenshots | App size |
+| Rating count and average | Minimum iOS version |
+| Price formatting, age rating label | Category, binary languages |
+
+Three consequences, each of which was a bug here before it was a feature:
+
+* **Reviews are per storefront.** Reading only the country in the URL — or
+  `us` for a bare app id — reports a handful of reviews for an app whose
+  audience is elsewhere. asolens ranks storefronts by rating count and reads
+  the top three, pinning the one you named, and the output says which.
+* **Rating volume is per storefront.** Judging an app from one storefront's
+  count is meaningless, so findings use the surveyed total.
+* **Binary languages are not listing localization.** `languageCodesISO2A`
+  describes the shipped binary; the App Store Connect listing is localized
+  separately. Instagram supports 39 languages and still serves English copy
+  in the Turkish store. These are two separate findings.
+
+The survey probes 18 storefronts in parallel and costs nothing extra, since
+ranking and localization need the same lookups. `--no-localization` skips it.
 
 ## Development
 

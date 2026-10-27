@@ -312,6 +312,9 @@ def html_report(result, out_dir):
         '<div class="meta">%s · v%s · %s · min iOS %s · <a href="%s">App Store</a></div>'
         % (_esc(app["developer"]), _esc(app["version"]), _esc(app["price"]),
            _esc(app["min_os"]), _esc(app["store_url"])),
+        '<div class="meta">Liste metni, görseller ve puanlar <b>%s</b> '
+        'mağazasından; bunlar mağazaya göre değişir.</div>'
+        % _esc((app.get("country") or "?").upper()),
         "</div>",
         '<div class="score"><b>%d</b><span>ASO puanı</span></div>' % result["score"],
         "</header>",

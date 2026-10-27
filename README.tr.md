@@ -118,6 +118,9 @@ Apple yorum feed'ini ülke başına 10 sayfa × 50 yorumla sınırlıyor. Birden
 
 ```
 --no-reviews     yorumları hiç çekme (hızlı koşu)
+--review-markets N   kaç mağazadan yorum okunacak (varsayılan 3)
+--no-localization    mağaza taramasını atla (daha hızlı; yorumlar o zaman
+                     yalnızca --country mağazasından gelir)
 --no-assets      görselleri indirme
 --fresh          önbelleği atla
 --json           report.json da yaz
@@ -193,6 +196,35 @@ Dürüst olmak gerekirse:
   indirip `vision-brief.md` ile birlikte bir modele veya insana bırakır.
 - **Google Play desteklemiyor.** Yapı platform-agnostik ama şu an yalnızca
   App Store istemcisi yazılı.
+
+## Tek uygulama, çok mağaza
+
+App Store tek bir katalog değil. Lookup API'sini mağazalar arasında tarayınca
+şu alanların değiştiği, şunların değişmediği çıktı:
+
+| Mağazaya göre değişir | Global |
+|---|---|
+| Liste metni (ad, açıklama, sürüm notu) | Sürüm ve yayın tarihi |
+| Ekran görüntüleri | Uygulama boyutu |
+| Oy sayısı ve ortalama puan | Minimum iOS sürümü |
+| Fiyat biçimi, yaş etiketi | Kategori, binary dilleri |
+
+Bunun üç sonucu var ve üçü de burada önce birer hataydı:
+
+* **Yorumlar mağaza bazlı.** Yalnızca URL'deki ülkeyi — ya da çıplak id'de
+  `us`'i — okumak, kitlesi başka yerde olan bir uygulama için avuç içi kadar
+  yorum raporlar. asolens mağazaları oy sayısına göre sıralayıp ilk üçünü
+  okuyor, senin verdiğin mağazayı başa sabitliyor ve hangilerini okuduğunu
+  çıktıda yazıyor.
+* **Oy hacmi mağaza bazlı.** Tek mağazanın sayısına bakarak hüküm vermek
+  anlamsız; bulgular taranan toplamı kullanıyor.
+* **Binary dilleri, liste lokalizasyonu değildir.** `languageCodesISO2A`
+  gönderilen binary'yi anlatır; App Store Connect listesi ayrıca lokalize
+  edilir. Instagram 39 dil destekliyor ama TR mağazasında İngilizce metin
+  gösteriyor. Bunlar artık iki ayrı bulgu.
+
+Tarama 18 mağazaya paralel gidiyor ve ek maliyeti yok, çünkü sıralama ile
+lokalizasyon aynı sorguları gerektiriyor. `--no-localization` atlatır.
 
 ## Geliştirme
 

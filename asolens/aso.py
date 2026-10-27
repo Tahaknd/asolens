@@ -331,7 +331,8 @@ def _check_reach(app):
                 "aramalarda görünmeyi sağlıyor — indekslenen alanlar dile göre "
                 "ayrı ayrı değerlendiriliyor.", 6, local["available_in"]))
         elif markets > 1:
-            fallback = max(local["by_variant"].values(), key=len)
+            groups = list((local.get("by_variant") or {}).values())
+            fallback = max(groups, key=len) if groups else []
             detail = "%d mağazada satışta, %d farklı metin." % (markets, distinct)
             if len(fallback) > 1:
                 detail += (" Aynı metni paylaşan ve muhtemelen lokalize "
@@ -380,16 +381,33 @@ def _check_ratings(app):
     count = app.get("rating_count") or 0
     rating = app.get("rating") or 0
     hist = app.get("rating_counts")
-    if count < 50:
+    store = (app.get("country") or "?").upper()
+
+    # Rating volume is per storefront and varies by orders of magnitude, so
+    # judging it from the one storefront that happened to be queried is
+    # meaningless. Use the surveyed total when it is available.
+    ratings_by_store = ((app.get("localization") or {}).get("ratings") or {})
+    total = sum(ratings_by_store.values()) or count
+    scope = ("%d mağaza toplamı" % len(ratings_by_store)
+             if ratings_by_store else "%s mağazası" % store)
+    split = ""
+    if ratings_by_store:
+        top = sorted(ratings_by_store.items(), key=lambda kv: -kv[1])[:4]
+        split = "En çok oy: %s. %s: %s." % (
+            ", ".join("%s %s" % (c.upper(), f"{n:,}") for c, n in top if n),
+            store, f"{count:,}")
+
+    if total < 50:
         out.append(Finding(
-            "ratings.volume", WARN, "Yalnızca %d oy" % count,
-            "Düşük oy sayısı hem sıralamada hem dönüşümde dezavantaj. "
-            "Uygulama içi puan isteme akışı (SKStoreReviewController) doğru "
-            "anda tetiklenmiyor olabilir.", 6, count))
+            "ratings.volume", WARN, "Yalnızca %s oy (%s)" % (f"{total:,}", scope),
+            ("Düşük oy sayısı hem sıralamada hem dönüşümde dezavantaj. "
+             "Uygulama içi puan isteme akışı (SKStoreReviewController) doğru "
+             "anda tetiklenmiyor olabilir. " + split).strip(), 6, total))
     else:
         out.append(Finding(
-            "ratings.volume", OK, "%s oy, ortalama %.2f" % (f"{count:,}", rating),
-            "", 6, count))
+            "ratings.volume", OK,
+            "%s oy (%s), %s mağazasında ortalama %.2f"
+            % (f"{total:,}", scope, store, rating), split, 6, total))
 
     if hist:
         total = sum(hist.values()) or 1

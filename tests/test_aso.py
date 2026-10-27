@@ -160,9 +160,24 @@ class ReachAndRatingTests(unittest.TestCase):
         self.assertEqual(find(aso.audit(app), "reach.size").severity, aso.WARN)
 
     def test_low_rating_volume_is_flagged(self):
-        self.assertEqual(
-            find(aso.audit(make_app(rating_count=12)), "ratings.volume").severity,
-            aso.WARN)
+        app = make_app(rating_count=12,
+                       localization={"available_in": ["us"], "ratings": {"us": 12},
+                                     "by_variant": {"a": ["us"]}, "distinct": 1,
+                                     "probed": []})
+        self.assertEqual(find(aso.audit(app), "ratings.volume").severity, aso.WARN)
+
+    def test_volume_is_judged_on_the_surveyed_total_not_one_storefront(self):
+        """Regression: rating volume is per storefront and varies by orders of
+        magnitude, so one storefront's count is not the app's audience."""
+        app = make_app(
+            rating_count=9,  # the queried storefront
+            localization={"available_in": ["us", "tr", "br"],
+                          "ratings": {"us": 9, "tr": 40_000, "br": 12_000},
+                          "by_variant": {"a": ["us"], "b": ["tr"], "c": ["br"]},
+                          "distinct": 3, "probed": []})
+        finding = find(aso.audit(app), "ratings.volume")
+        self.assertEqual(finding.severity, aso.OK)
+        self.assertIn("TR", finding.detail)
 
     def test_one_star_share_thresholds(self):
         heavy = make_app(rating_counts={5: 50, 4: 10, 3: 10, 2: 10, 1: 120})
@@ -188,3 +203,22 @@ class TokenisingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MalformedSurveyTests(unittest.TestCase):
+    """The survey comes off the network, so the audit must not trust its shape."""
+
+    def audit_with(self, localization):
+        return aso.audit(make_app(localization=localization))
+
+    def test_empty_variant_map_does_not_crash(self):
+        self.audit_with({"available_in": ["us", "de"], "ratings": {},
+                         "by_variant": {}, "distinct": 2, "probed": []})
+
+    def test_missing_keys_do_not_crash(self):
+        self.audit_with({"available_in": ["us", "de"]})
+
+    def test_localization_absent_entirely(self):
+        findings = self.audit_with(None)
+        self.assertIsNone(find(findings, "reach.listing_localization"))
+        self.assertIsNotNone(find(findings, "ratings.volume"))
