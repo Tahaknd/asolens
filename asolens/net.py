@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import json
 import os
+import random
 import tempfile
 import time
 import urllib.error
@@ -28,6 +29,13 @@ UA = (
 TOOL_UA = "asolens (universal-links verifier)"
 
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "asolens")
+
+# Apple rate-limits the lookup endpoint, and parallel runs reach that limit
+# sooner. These statuses are worth retrying; anything else is a real answer.
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+MAX_ATTEMPTS = 4
+BACKOFF_BASE = 0.8
+BACKOFF_CAP = 8.0
 
 
 class FetchError(RuntimeError):
@@ -54,17 +62,57 @@ def get(url, ttl=3600, timeout=25, binary=False, ua=UA):
                 "Accept-Encoding": "gzip",
             },
         )
+        raw = _fetch_with_retries(req, url, timeout)
+        _write_atomically(path, raw)
+    return raw if binary else raw.decode("utf-8", "replace")
+
+
+def _fetch_with_retries(req, url, timeout):
+    """Issue the request, retrying rate limits and transient server errors.
+
+    Backoff is exponential with jitter so parallel workers that all hit the
+    limit at once do not then retry in lockstep. A 429 that names Retry-After
+    is obeyed instead.
+    """
+    last = None
+    for attempt in range(MAX_ATTEMPTS):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()
                 if resp.headers.get("Content-Encoding") == "gzip":
                     raw = gzip.decompress(raw)
+                return raw
         except urllib.error.HTTPError as exc:
-            raise FetchError("HTTP %s for %s" % (exc.code, url)) from exc
+            last = FetchError("HTTP %s for %s" % (exc.code, url))
+            if exc.code not in RETRY_STATUSES:
+                raise last from exc
+            delay = _retry_after(exc) or _backoff(attempt)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last = FetchError("%s for %s" % (exc, url))
+            delay = _backoff(attempt)
         except Exception as exc:
             raise FetchError("%s for %s" % (exc, url)) from exc
-        _write_atomically(path, raw)
-    return raw if binary else raw.decode("utf-8", "replace")
+
+        if attempt == MAX_ATTEMPTS - 1:
+            break
+        time.sleep(delay)
+    raise last
+
+
+def _backoff(attempt):
+    return min(BACKOFF_CAP, BACKOFF_BASE * (2 ** attempt)) * (0.5 + random.random())
+
+
+def _retry_after(exc):
+    """Seconds from a Retry-After header, when the server sends a sane one."""
+    header = getattr(exc, "headers", None)
+    value = header.get("Retry-After") if header else None
+    if not value:
+        return None
+    try:
+        return max(0.0, min(BACKOFF_CAP, float(value)))
+    except (TypeError, ValueError):
+        return None
 
 
 def _write_atomically(path, raw):
