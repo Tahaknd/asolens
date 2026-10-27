@@ -44,6 +44,17 @@ class ParserTests(unittest.TestCase):
         args = cli.build_parser().parse_args(["analyze", "id1"])
         self.assertIsNone(args.compare)
 
+    def test_version_flag_reports_the_package_version(self):
+        from asolens import __version__
+        with self.assertRaises(SystemExit) as caught:
+            run(["--version"])
+        self.assertEqual(caught.exception.code, 0)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            with contextlib.suppress(SystemExit):
+                cli.main(["--version"])
+        self.assertIn(__version__, out.getvalue())
+
 
 class AnalyzeTests(unittest.TestCase):
     def setUp(self):

@@ -2,10 +2,11 @@
 
 import argparse
 import os
+import platform
 import sys
 import webbrowser
 
-from asolens import aso, assets, compare, deeplinks, ios_store, report, reviews
+from asolens import __version__, aso, assets, compare, deeplinks, ios_store, report, reviews
 from asolens.aso import CRITICAL, WARN
 from asolens.util import human_size, wrap
 
@@ -15,6 +16,9 @@ def build_parser():
         prog="asolens",
         description="Mobil uygulama analiz aracı — ASO denetimi ve paket denetimi.",
     )
+    parser.add_argument(
+        "--version", action="version",
+        version="asolens %s (Python %s)" % (__version__, platform.python_version()))
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     analyze = subparsers.add_parser(
