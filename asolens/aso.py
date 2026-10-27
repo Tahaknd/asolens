@@ -319,7 +319,14 @@ def _check_reach(app):
             ", ".join(langs[:12]) + ("…" if len(langs) > 12 else ""), 0, langs))
 
     local = app.get("localization")
-    if local and local.get("available_in"):
+    if local and not local.get("usable", True):
+        out.append(Finding(
+            "reach.listing_localization", INFO, "Mağaza taraması tamamlanamadı",
+            "%d mağazanın %d tanesi sorgulanamadı, bu yüzden liste "
+            "lokalizasyonu ve oy dağılımı hakkında bir şey söylenemiyor."
+            % (len(local.get("probed") or []), len(local.get("failed") or [])),
+            0, local.get("failed")))
+    elif local and local.get("available_in"):
         markets = len(local["available_in"])
         distinct = local.get("distinct") or 0
         if markets > 1 and distinct <= 1:
@@ -386,12 +393,15 @@ def _check_ratings(app):
     # Rating volume is per storefront and varies by orders of magnitude, so
     # judging it from the one storefront that happened to be queried is
     # meaningless. Use the surveyed total when it is available.
-    ratings_by_store = ((app.get("localization") or {}).get("ratings") or {})
+    survey = app.get("localization") or {}
+    ratings_by_store = (survey.get("ratings") or {}) if survey.get("usable", True) else {}
     total = sum(ratings_by_store.values()) or count
-    scope = ("%d mağaza toplamı" % len(ratings_by_store)
-             if ratings_by_store else "%s mağazası" % store)
+    if len(ratings_by_store) > 1:
+        scope = "%d mağaza toplamı" % len(ratings_by_store)
+    else:
+        scope = "%s mağazası" % store
     split = ""
-    if ratings_by_store:
+    if len(ratings_by_store) > 1:
         top = sorted(ratings_by_store.items(), key=lambda kv: -kv[1])[:4]
         split = "En çok oy: %s. %s: %s." % (
             ", ".join("%s %s" % (c.upper(), f"{n:,}") for c, n in top if n),

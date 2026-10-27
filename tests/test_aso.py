@@ -222,3 +222,34 @@ class MalformedSurveyTests(unittest.TestCase):
         findings = self.audit_with(None)
         self.assertIsNone(find(findings, "reach.listing_localization"))
         self.assertIsNotNone(find(findings, "ratings.volume"))
+
+
+class UnusableSurveyTests(unittest.TestCase):
+    """A throttled or blocked survey must not be reported as fact."""
+
+    UNUSABLE = {"probed": ["us", "de", "tr"], "available_in": [], "ratings": {},
+                "by_variant": {}, "distinct": 0, "failed": ["us", "de", "tr"],
+                "usable": False}
+
+    def test_localization_is_reported_as_unknown(self):
+        finding = find(aso.audit(make_app(localization=self.UNUSABLE)),
+                       "reach.listing_localization")
+        self.assertEqual(finding.severity, aso.INFO)
+        self.assertEqual(finding.weight, 0)
+
+    def test_rating_volume_falls_back_to_the_queried_storefront(self):
+        app = make_app(rating_count=5400, localization=self.UNUSABLE)
+        finding = find(aso.audit(app), "ratings.volume")
+        self.assertEqual(finding.severity, aso.OK)
+        self.assertNotIn("mağaza toplamı", finding.title)
+
+    def test_single_storefront_detail_is_not_padded_with_noise(self):
+        """"En çok oy: TR 9. TR: 9." reads as a bug, because it is one."""
+        app = make_app(
+            rating_count=9,
+            localization={"probed": ["tr"], "available_in": ["tr"],
+                          "ratings": {"tr": 9}, "by_variant": {"a": ["tr"]},
+                          "distinct": 1, "failed": [], "usable": True})
+        finding = find(aso.audit(app), "ratings.volume")
+        self.assertNotIn("En çok oy", finding.detail)
+        self.assertNotIn("TR: 9", finding.detail)

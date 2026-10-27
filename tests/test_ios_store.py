@@ -1,6 +1,7 @@
 import unittest
+from unittest import mock
 
-from asolens import ios_store
+from asolens import ios_store, net
 
 
 class ParseUrlTests(unittest.TestCase):
@@ -133,3 +134,57 @@ class ReviewMarketTests(unittest.TestCase):
     def test_an_empty_survey_yields_nothing_to_rank(self):
         self.assertEqual(ios_store.rank_review_markets(None), [])
         self.assertEqual(ios_store.rank_review_markets({}), [])
+
+
+class SurveyFailureTests(unittest.TestCase):
+    """A survey that reached nothing must not look like a single-market app."""
+
+    def survey(self, outcomes):
+        """outcomes: {country: payload | FetchError}"""
+        def fake_get_json(url, ttl=3600, ua=None):
+            code = url.rsplit("country=", 1)[1]
+            value = outcomes.get(code)
+            if isinstance(value, Exception):
+                raise value
+            return {"results": value or []}
+
+        with mock.patch.object(net, "get_json", fake_get_json):
+            return ios_store.storefront_survey(
+                "1", storefronts=tuple(outcomes), ttl=0)
+
+    def record(self, name="App", desc="Text", ratings=10):
+        return [{"trackName": name, "description": desc, "releaseNotes": "",
+                 "userRatingCount": ratings}]
+
+    def test_an_absent_app_is_not_a_failure(self):
+        result = self.survey({"us": self.record(), "jp": []})
+        self.assertEqual(result["available_in"], ["us"])
+        self.assertEqual(result["failed"], [])
+        self.assertTrue(result["usable"])
+
+    def test_failed_probes_are_recorded_separately(self):
+        result = self.survey({
+            "us": self.record(), "de": net.FetchError("boom"), "tr": self.record()})
+        self.assertEqual(result["failed"], ["de"])
+        self.assertEqual(result["available_in"], ["tr", "us"])
+
+    def test_a_survey_that_reached_nothing_is_not_usable(self):
+        result = self.survey({c: net.FetchError("boom") for c in ("us", "de", "tr")})
+        self.assertFalse(result["usable"])
+        self.assertEqual(result["available_in"], [])
+
+    def test_mostly_failed_is_not_usable_either(self):
+        result = self.survey({
+            "us": self.record(), "de": net.FetchError("x"),
+            "tr": net.FetchError("x"), "br": net.FetchError("x")})
+        self.assertFalse(result["usable"])
+
+    def test_identical_copy_collapses_into_one_variant(self):
+        result = self.survey({"us": self.record(), "gb": self.record()})
+        self.assertEqual(result["distinct"], 1)
+
+    def test_different_copy_counts_as_separate_localizations(self):
+        result = self.survey({
+            "us": self.record(desc="Track your spending"),
+            "de": self.record(desc="Behalte deine Ausgaben im Blick")})
+        self.assertEqual(result["distinct"], 2)

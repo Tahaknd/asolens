@@ -12,8 +12,10 @@ import json
 import os
 import random
 import tempfile
+import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 UA = (
@@ -33,6 +35,18 @@ CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "asolens")
 # Apple rate-limits the lookup endpoint, and parallel runs reach that limit
 # sooner. These statuses are worth retrying; anything else is a real answer.
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+# Apple throttles by burst, not by total volume. Eighteen parallel lookups
+# stall for minutes and then fail outright, while the same eighteen spaced a
+# quarter second apart all answer in 0.3s. So requests to Apple's own hosts
+# are paced; image CDNs are not throttled and are left alone.
+HOST_PACING = {
+    "itunes.apple.com": 0.25,
+    "apps.apple.com": 0.25,
+}
+
+_pace_lock = threading.Lock()
+_last_request = {}
 MAX_ATTEMPTS = 4
 BACKOFF_BASE = 0.8
 BACKOFF_CAP = 8.0
@@ -67,6 +81,26 @@ def get(url, ttl=3600, timeout=25, binary=False, ua=UA):
     return raw if binary else raw.decode("utf-8", "replace")
 
 
+def _pace(url):
+    """Block until this host's minimum spacing has elapsed.
+
+    The lock is held across the sleep on purpose: that is what serialises
+    concurrent callers into a paced queue instead of letting them all wake at
+    once.
+    """
+    host = urllib.parse.urlparse(url).netloc.lower().split(":")[0]
+    interval = HOST_PACING.get(host)
+    if not interval:
+        return
+    with _pace_lock:
+        now = time.monotonic()
+        earliest = _last_request.get(host, 0.0) + interval
+        if earliest > now:
+            time.sleep(earliest - now)
+            now = earliest
+        _last_request[host] = now
+
+
 def _fetch_with_retries(req, url, timeout):
     """Issue the request, retrying rate limits and transient server errors.
 
@@ -76,6 +110,7 @@ def _fetch_with_retries(req, url, timeout):
     """
     last = None
     for attempt in range(MAX_ATTEMPTS):
+        _pace(url)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()

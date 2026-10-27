@@ -221,21 +221,35 @@ def storefront_survey(app_id, storefronts=PROBE_STOREFRONTS, ttl=3600):
     Both come from the same requests, so the survey costs nothing extra.
     """
     def probe(code):
+        """(code, state, digest, ratings) where state is present/absent/error.
+
+        "Not sold in this storefront" and "the request failed" must not look
+        alike: the first is a fact about the app, the second is a gap in what
+        we know, and reporting the second as the first is how a throttled run
+        ends up asserting an app is single-market.
+        """
         try:
-            record = lookup(app_id, country=code, ttl=ttl)
-        except Exception:
-            return code, None, 0
+            data = net.get_json(
+                LOOKUP.format(app_id=app_id, country=code), ttl=ttl)
+        except net.FetchError:
+            return code, "error", None, 0
+        found = data.get("results") or []
+        if not found:
+            return code, "absent", None, 0
+        record = found[0]
         text = "%s\u0000%s\u0000%s" % (
             record.get("trackName") or "",
             record.get("description") or "",
             record.get("releaseNotes") or "")
         digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
-        return code, digest, int(record.get("userRatingCount") or 0)
+        return code, "present", digest, int(record.get("userRatingCount") or 0)
 
-    results = parallel_map(probe, storefronts)
-    available, ratings, variants = [], {}, {}
-    for code, digest, count in results:
-        if not digest:
+    available, ratings, variants, failed = [], {}, {}, []
+    for code, state, digest, count in parallel_map(probe, storefronts):
+        if state == "error":
+            failed.append(code)
+            continue
+        if state == "absent":
             continue
         available.append(code)
         ratings[code] = count
@@ -243,9 +257,13 @@ def storefront_survey(app_id, storefronts=PROBE_STOREFRONTS, ttl=3600):
     return {
         "probed": list(storefronts),
         "available_in": sorted(available),
+        "failed": sorted(failed),
         "ratings": ratings,
         "by_variant": {d: sorted(c) for d, c in variants.items()},
         "distinct": len(variants),
+        # A survey that reached nothing knows nothing. Callers must be able to
+        # tell that apart from an app that genuinely sells in one market.
+        "usable": bool(available) and len(failed) < len(storefronts) / 2,
     }
 
 

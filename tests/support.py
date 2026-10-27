@@ -57,6 +57,7 @@ def make_app(**overrides):
         "localization": {
             "probed": ["us"], "available_in": ["us"], "ratings": {"us": 5400},
             "by_variant": {"abc": ["us"]}, "distinct": 1,
+            "failed": [], "usable": True,
         },
         "review_markets": ["us"],
         "reviews": [],
