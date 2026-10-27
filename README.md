@@ -2,6 +2,8 @@
 
 ***English** · [Türkçe](README.tr.md)*
 
+[![tests](https://github.com/Tahaknd/asolens/actions/workflows/tests.yml/badge.svg)](https://github.com/Tahaknd/asolens/actions/workflows/tests.yml)
+
 A local App Store Optimization auditor and iOS bundle checker. It looks at an
 app from two sides:
 
@@ -132,7 +134,18 @@ countries is the only way past a single market.
 ```
 
 Responses are cached in `~/.cache/asolens` for an hour. The exit code is `1`
-when a critical finding exists and `0` otherwise, so it can gate CI.
+when a critical finding exists, `2` on bad input and `0` otherwise, so it can
+gate CI.
+
+## `cache`
+
+Screenshot downloads go through the same cache as API responses, so it grows.
+
+```bash
+asolens cache              # location, entry count, total size, oldest entry
+asolens cache --prune 7    # drop entries older than a week
+asolens cache --clear      # empty it
+```
 
 ## `crawl`
 
@@ -187,6 +200,18 @@ asolens uses it automatically and records the element tree with each frame.
 - **No Google Play yet.** The structure is platform-agnostic, but only the App
   Store client is written.
 
+## Development
+
+The test suite is stdlib `unittest` and never touches the network — every
+fixture is built in `tests/support.py`.
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
+
+CI runs the same command on Python 3.9, 3.11 and 3.13, and separately installs
+the package to check the console script works.
+
 ## Layout
 
 ```
@@ -203,6 +228,8 @@ asolens/
   crawl/
     ios_sim.py    .app static audit + Simulator sweep
 tests/
+  support.py      fixture builders shared by every suite
+  test_*.py       the suites
   make_fixture.py builds a deliberately broken .app
 ```
 

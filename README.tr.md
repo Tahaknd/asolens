@@ -2,6 +2,8 @@
 
 *[English](README.md) · **Türkçe***
 
+[![tests](https://github.com/Tahaknd/asolens/actions/workflows/tests.yml/badge.svg)](https://github.com/Tahaknd/asolens/actions/workflows/tests.yml)
+
 Mobil uygulama analizi için yerel bir CLI. İki yönden bakar:
 
 - **`analyze`** — bir App Store sayfasını **dışarıdan** denetler. Herkesin
@@ -123,8 +125,20 @@ Apple yorum feed'ini ülke başına 10 sayfa × 50 yorumla sınırlıyor. Birden
 --out DIZIN      çıktı dizinini değiştir
 ```
 
-Yanıtlar `~/.cache/asolens` altında 1 saat önbelleklenir. Kritik
-bulgu varsa çıkış kodu `1` olur, yoksa `0` — CI'da eşik olarak kullanılabilir.
+Yanıtlar `~/.cache/asolens` altında 1 saat önbelleklenir. Çıkış kodu kritik
+bulgu varsa `1`, hatalı girdide `2`, temizse `0` — CI'da eşik olarak
+kullanılabilir.
+
+## `cache` — önbellek yönetimi
+
+Ekran görüntüleri de API yanıtlarıyla aynı önbellekten geçtiği için klasör
+zamanla büyüyor.
+
+```bash
+asolens cache              # konum, girdi sayısı, boyut, en eski girdi
+asolens cache --prune 7    # bir haftadan eski girdileri at
+asolens cache --clear      # tamamen boşalt
+```
 
 ## `crawl` — paket denetimi
 
@@ -180,6 +194,18 @@ Dürüst olmak gerekirse:
 - **Google Play desteklemiyor.** Yapı platform-agnostik ama şu an yalnızca
   App Store istemcisi yazılı.
 
+## Geliştirme
+
+Testler stdlib `unittest` ile yazıldı ve hiçbiri ağa çıkmıyor — bütün veri
+`tests/support.py` içinde kuruluyor.
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
+
+CI aynı komutu Python 3.9, 3.11 ve 3.13 üzerinde çalıştırıyor; ayrı bir iş de
+paketi kurup konsol komutunun çalıştığını doğruluyor.
+
 ## Yapı
 
 ```
@@ -196,6 +222,8 @@ asolens/
   crawl/
     ios_sim.py    .app statik denetimi + Simulator sweep
 tests/
+  support.py      tüm testlerin paylaştığı veri üreticileri
+  test_*.py       test dosyaları
   make_fixture.py bilinçli bozuk bir .app üretir
 ```
 
