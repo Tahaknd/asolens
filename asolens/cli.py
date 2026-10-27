@@ -7,6 +7,7 @@ import webbrowser
 
 from asolens import aso, assets, compare, deeplinks, ios_store, report, reviews
 from asolens.aso import CRITICAL, WARN
+from asolens.util import human_size, wrap
 
 
 def build_parser():
@@ -158,14 +159,14 @@ def cmd_crawl(args):
     print("  %s · %s" % (info["name"] or "?", info["bundle_id"]))
     print("  v%s (%s) · min iOS %s · %s" % (
         info["version"], info["build"], info["min_os"],
-        crawl.ios_sim._human_size(info["size_bytes"])))
+        human_size(info["size_bytes"])))
     print("")
 
     glyph = {CRITICAL: "✗", WARN: "!", "info": "·", "ok": "✓"}
     for finding in sorted(findings, key=lambda f: report.SEV_ORDER[f.severity]):
         print("  %s %s" % (glyph.get(finding.severity, "·"), finding.title))
         if finding.detail and finding.severity in (CRITICAL, WARN):
-            for chunk in report._wrap(finding.detail, 72):
+            for chunk in wrap(finding.detail, 72):
                 print("      %s" % chunk)
     print("")
 

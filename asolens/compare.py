@@ -5,20 +5,10 @@ in their indexed fields (title + subtitle) that you do not use at all.
 """
 
 import collections
-import datetime
 
 from asolens import aso, ios_store
+from asolens.util import days_since
 
-
-def _days_since(stamp):
-    if not stamp:
-        return None
-    try:
-        when = datetime.datetime.strptime(stamp[:10], "%Y-%m-%d")
-    except ValueError:
-        return None
-    when = when.replace(tzinfo=datetime.timezone.utc)
-    return (datetime.datetime.now(datetime.timezone.utc) - when).days
 
 
 def row(app):
@@ -33,7 +23,7 @@ def row(app):
         "languages": len(app.get("languages") or []),
         "rating": app.get("rating"),
         "rating_count": app.get("rating_count"),
-        "days_since_update": _days_since(app.get("version_released")),
+        "days_since_update": days_since(app.get("version_released")),
         "size_mb": round((app.get("size_bytes") or 0) / 1048576.0),
         "price": app.get("price"),
         "store_url": app.get("store_url"),

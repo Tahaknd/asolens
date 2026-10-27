@@ -6,6 +6,7 @@ import json
 import os
 
 from asolens.aso import CRITICAL, INFO, OK, WARN
+from asolens.util import wrap
 
 SEV_ORDER = {CRITICAL: 0, WARN: 1, INFO: 2, OK: 3}
 SEV_LABEL = {CRITICAL: "KRİTİK", WARN: "UYARI", INFO: "BİLGİ", OK: "TAMAM"}
@@ -44,7 +45,7 @@ def console(result, color=True):
             lines.append("  %s %s" % (
                 paint(SEV_GLYPH[finding.severity], finding.severity), finding.title))
             if finding.detail:
-                for chunk in _wrap(finding.detail, 72):
+                for chunk in wrap(finding.detail, 72):
                     lines.append("      %s" % chunk)
             lines.append("")
 
@@ -81,18 +82,6 @@ def console(result, color=True):
     lines.append("")
     return "\n".join(lines)
 
-
-def _wrap(text, width):
-    words, line, out = text.split(), "", []
-    for word in words:
-        if len(line) + len(word) + 1 > width:
-            out.append(line)
-            line = word
-        else:
-            line = (line + " " + word).strip()
-    if line:
-        out.append(line)
-    return out
 
 
 # ------------------------------------------------------------------------ html

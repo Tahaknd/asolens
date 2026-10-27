@@ -24,6 +24,7 @@ import subprocess
 import time
 
 from asolens.aso import CRITICAL, INFO, OK, WARN, Finding
+from asolens.util import human_size
 
 PLACEHOLDER = re.compile(
     r"^\s*$|lorem|todo|xxx|test|placeholder|description here|açıklama", re.I)
@@ -75,12 +76,6 @@ def _entitlements(app_path):
         return None
 
 
-def _human_size(size):
-    if size < 1048576:
-        return "%.0f KB" % (size / 1024.0)
-    return "%.1f MB" % (size / 1048576.0)
-
-
 def _tree_size(path):
     total = 0
     for root, _dirs, files in os.walk(path):
@@ -122,7 +117,7 @@ def static_audit(app_path):
         "bundle.identity", INFO,
         "%s · v%s (%s) · min iOS %s" % (
             info["bundle_id"], info["version"], info["build"], info["min_os"]),
-        "Paket boyutu %s" % _human_size(info["size_bytes"]), 0, app_path))
+        "Paket boyutu %s" % human_size(info["size_bytes"]), 0, app_path))
 
     # Privacy usage strings
     bad = []

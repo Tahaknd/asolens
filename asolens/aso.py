@@ -10,8 +10,9 @@ so a human decides instead of the tool pretending to know.
 """
 
 import collections
-import datetime
 import re
+
+from asolens.util import days_since
 
 CRITICAL = "critical"
 WARN = "warn"
@@ -88,16 +89,6 @@ def tokens(text):
 def content_tokens(text):
     return [t for t in tokens(text) if t not in STOPWORDS and len(t) > 2]
 
-
-def _days_since(stamp):
-    if not stamp:
-        return None
-    try:
-        when = datetime.datetime.strptime(stamp[:10], "%Y-%m-%d")
-    except ValueError:
-        return None
-    when = when.replace(tzinfo=datetime.timezone.utc)
-    return (datetime.datetime.now(datetime.timezone.utc) - when).days
 
 
 def audit(app):
@@ -255,7 +246,7 @@ def _check_release(app):
         out.append(Finding(
             "release.notes", OK, "Sürüm notu özgün", "", 4, notes[:200]))
 
-    days = _days_since(app.get("version_released"))
+    days = days_since(app.get("version_released"))
     if days is None:
         out.append(Finding("release.cadence", INFO, "Son güncelleme tarihi okunamadı", "", 0))
     elif days > 180:
