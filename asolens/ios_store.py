@@ -25,22 +25,33 @@ REVIEWS = (
 REVIEW_PAGES = 10  # Apple caps the feed at 10 pages of 50
 
 
+APPLE_HOSTS = ("apps.apple.com", "itunes.apple.com", "music.apple.com")
+
+
 def parse_url(value):
     """Accept a store URL, an `id123` fragment or a bare numeric id.
 
     Returns (app_id, country) where country falls back to None so the caller
     can apply its own default.
     """
-    value = value.strip()
+    value = (value or "").strip()
     if value.isdigit():
         return value, None
-    match = re.search(r"id(\d{6,})", value)
-    if not match:
-        match = re.search(r"(\d{8,})", value)
+
+    parsed = urllib.parse.urlparse(value if "//" in value else "https://" + value)
+    host = parsed.netloc.lower().split(":")[0]
+    on_apple = host.endswith(APPLE_HOSTS)
+
+    match = re.search(r"\bid(\d{6,})", value)
+    if not match and on_apple:
+        # Some Apple URLs carry the id without the "id" prefix. Only trust a
+        # bare number on an Apple host: elsewhere it is far more likely to be
+        # a date or an unrelated path segment.
+        match = re.search(r"(\d{8,})", parsed.path)
     if not match:
         raise ValueError("could not find an app id in %r" % value)
+
     country = None
-    parsed = urllib.parse.urlparse(value if "//" in value else "https://" + value)
     parts = [p for p in parsed.path.split("/") if p]
     if parts and len(parts[0]) == 2 and parts[0].isalpha():
         country = parts[0].lower()

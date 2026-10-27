@@ -38,9 +38,25 @@ class ParseUrlTests(unittest.TestCase):
             ("389801252", "tr"),
         )
 
+    def test_bare_number_is_accepted_on_an_apple_host(self):
+        self.assertEqual(
+            ios_store.parse_url("https://apps.apple.com/us/app/foo/389801252"),
+            ("389801252", "us"),
+        )
+
+    def test_a_long_number_on_another_host_is_not_an_app_id(self):
+        """A date in a blog URL used to be read as an app id."""
+        for url in ("https://example.com/20240101",
+                    "https://blog.example.com/posts/12345678"):
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    ios_store.parse_url(url)
+
     def test_garbage_raises(self):
-        with self.assertRaises(ValueError):
-            ios_store.parse_url("merhaba")
+        for value in ("merhaba", "", None):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    ios_store.parse_url(value)
 
 
 class LabelTests(unittest.TestCase):
