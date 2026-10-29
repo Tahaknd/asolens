@@ -187,3 +187,46 @@ class CrawlTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnreadablePageTests(unittest.TestCase):
+    """A page that could not be read must not become a finding about the app."""
+
+    def setUp(self):
+        self.out_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.out_dir, ignore_errors=True)
+
+    def analyze(self, app):
+        with mock.patch.object(ios_store, "fetch_app", return_value=app), \
+             mock.patch("asolens.deeplinks.check", return_value=[]):
+            return run(["analyze", "id123456789", "--out", self.out_dir,
+                        "--no-assets", "--no-color"])
+
+    def test_missing_subtitle_is_not_critical_when_the_page_failed(self):
+        app = make_app(subtitle=None, page_data_ok=False)
+        code, output = self.analyze(app)
+        self.assertIn("Subtitle okunamadı", output)
+        self.assertNotIn("Subtitle boş", output)
+        self.assertEqual(code, 0)
+
+    def test_missing_subtitle_is_critical_when_the_page_was_read(self):
+        app = make_app(subtitle=None, page_data_ok=True)
+        code, output = self.analyze(app)
+        self.assertIn("Subtitle boş", output)
+        self.assertEqual(code, 1)
+
+    def test_a_truncated_review_sample_is_announced(self):
+        app = make_app(
+            reviews=[make_review(rating=1, title="crashes")],
+            review_errors=[{"country": "tr", "page": 4, "error": "HTTP 503"}])
+        _, output = self.analyze(app)
+        self.assertIn("örneklem eksik", output)
+        self.assertIn("TR", output)
+
+    def test_auto_compare_says_why_it_found_nothing(self):
+        app = make_app(similar_apps=[], page_data_ok=False)
+        with mock.patch.object(ios_store, "fetch_app", return_value=app), \
+             mock.patch("asolens.deeplinks.check", return_value=[]):
+            _, output = run(["analyze", "id123456789", "--out", self.out_dir,
+                             "--no-assets", "--no-color", "--compare"])
+        self.assertIn("ürün sayfası okunamadı", output)

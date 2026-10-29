@@ -144,6 +144,14 @@ def _check_subtitle(app):
     sub = (app.get("subtitle") or "").strip()
     out = []
     if not sub:
+        # The subtitle only exists on the product page. If that page could not
+        # be read, we know nothing about it — which is not the same as it
+        # being empty, and must not be scored as though it were.
+        if app.get("page_data_ok") is False:
+            return [Finding(
+                "subtitle.present", INFO, "Subtitle okunamadı",
+                "Ürün sayfası alınamadığı için subtitle, puan dağılımı ve "
+                "benzer uygulamalar bu koşuda bilinmiyor.", 0)]
         return [Finding(
             "subtitle.present", CRITICAL, "Subtitle boş",
             "30 karakterlik, başlıktan sonra en ağırlıklı ikinci indeksleme "

@@ -97,7 +97,11 @@ def page_extras(app_id, country="us", ttl=3600):
     Returns a dict with keys that are always present but may be None/empty, so
     callers never have to guard every access.
     """
+    # "ok" separates "the page says there is no subtitle" from "the page
+    # could not be read". Without it an unreachable page becomes a confident
+    # critical finding about a field nobody looked at.
     out = {
+        "ok": False,
         "subtitle": None,
         "rating_counts": None,
         "privacy_types": [],
@@ -115,6 +119,7 @@ def page_extras(app_id, country="us", ttl=3600):
         page = data["data"][0]["data"]
     except (KeyError, IndexError, TypeError):
         return out
+    out["ok"] = True
 
     lock = page.get("lockup") or {}
     out["subtitle"] = lock.get("subtitle")
@@ -155,14 +160,22 @@ def page_extras(app_id, country="us", ttl=3600):
     return out
 
 
-def reviews(app_id, country="us", pages=REVIEW_PAGES, ttl=3600):
-    """Return recent reviews, newest first. Missing pages are skipped."""
+def reviews(app_id, country="us", pages=REVIEW_PAGES, ttl=3600, errors=None):
+    """Return recent reviews, newest first.
+
+    A page that fails stops the walk, because the feed is ordered and a gap
+    would silently skew everything after it. When `errors` is given the
+    failure is appended to it rather than vanishing, so the caller can say the
+    sample is partial.
+    """
     found = []
     for page in range(1, pages + 1):
         url = REVIEWS.format(country=country, page=page, app_id=app_id)
         try:
             data = net.get_json(url, ttl=ttl)
-        except net.FetchError:
+        except net.FetchError as exc:
+            if errors is not None and page > 1:
+                errors.append({"country": country, "page": page, "error": str(exc)})
             break
         entries = (data.get("feed") or {}).get("entry") or []
         if isinstance(entries, dict):
@@ -324,8 +337,10 @@ def fetch_app(app_id, country="us", review_countries=(), review_pages=REVIEW_PAG
         "privacy_types": extras["privacy_types"],
         "similar_apps": extras["similar_apps"],
         "editors_choice": extras["editorial_badge"],
+        "page_data_ok": extras["ok"],
         "localization": None,
         "review_markets": [],
+        "review_errors": [],
         "reviews": [],
     }
     if with_localization:
@@ -340,9 +355,12 @@ def fetch_app(app_id, country="us", review_countries=(), review_pages=REVIEW_PAG
                 profile["localization"], preferred=country,
                 limit=review_markets) or [country]
         profile["review_markets"] = countries
+        truncated = []
         batches = parallel_map(
-            lambda code: reviews(app_id, country=code, pages=review_pages, ttl=ttl),
+            lambda code: reviews(app_id, country=code, pages=review_pages,
+                                 ttl=ttl, errors=truncated),
             countries)
+        profile["review_errors"] = truncated
         seen = set()
         for batch in batches:
             for review in batch:

@@ -158,6 +158,10 @@ def cmd_analyze(args):
         with open(brief, "w", encoding="utf-8") as fh:
             fh.write(reviews.handoff_brief(app, result["reviews"]))
 
+    for failure in app.get("review_errors") or []:
+        print("  ! %s yorumları %d. sayfada kesildi, örneklem eksik: %s" % (
+            failure["country"].upper(), failure["page"], failure["error"]))
+
     print("· Universal Links doğrulanıyor…")
     result["deeplinks"] = deeplinks.check(app, ttl=ttl)
 
@@ -170,7 +174,13 @@ def cmd_analyze(args):
                 print("  ! atlandı: %s" % value, file=sys.stderr)
         if not ids:
             ids = [a["id"] for a in app["similar_apps"][:6]]
-            print("· Mağazanın önerdiği %d benzer app karşılaştırılıyor…" % len(ids))
+            if not ids:
+                print("· Karşılaştırılacak benzer app bulunamadı%s."
+                      % (" (ürün sayfası okunamadı)"
+                         if app.get("page_data_ok") is False else ""))
+            else:
+                print("· Mağazanın önerdiği %d benzer app karşılaştırılıyor…"
+                      % len(ids))
         else:
             print("· %d rakip karşılaştırılıyor…" % len(ids))
         if ids:
