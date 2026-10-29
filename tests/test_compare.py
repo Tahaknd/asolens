@@ -106,3 +106,21 @@ class RunTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompetitorCostTests(unittest.TestCase):
+    def test_competitors_are_fetched_without_a_storefront_survey(self):
+        """Regression: six competitors each ran an 18-storefront survey,
+        turning a comparison into 120 requests for data the table never uses."""
+        seen = []
+
+        def fetch(app_id, **kwargs):
+            seen.append(kwargs)
+            return make_app(name="Rival")
+
+        with mock.patch.object(ios_store, "fetch_app", side_effect=fetch):
+            compare.run(make_app(), ["a", "b"], country="us")
+        self.assertTrue(seen)
+        for kwargs in seen:
+            self.assertFalse(kwargs.get("with_localization", True))
+            self.assertFalse(kwargs.get("with_reviews", True))

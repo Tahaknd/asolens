@@ -68,8 +68,11 @@ def keyword_gap(target, competitors):
 def run(target, competitor_ids, country="us", ttl=3600):
     def fetch(app_id):
         try:
+            # The comparison table needs listing fields only. A storefront
+            # survey per competitor turned six rivals into 120 requests.
             return ios_store.fetch_app(
-                app_id, country=country, ttl=ttl, with_reviews=False), None
+                app_id, country=country, ttl=ttl,
+                with_reviews=False, with_localization=False), None
         except Exception as exc:  # a dead competitor id must not kill the run
             return None, {"id": app_id, "error": str(exc)}
 

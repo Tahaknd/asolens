@@ -172,3 +172,49 @@ class DomainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BannerPathTests(unittest.TestCase):
+    """The AASA file must be at the domain root; the marketing page need not."""
+
+    def test_a_subpath_site_is_tried_before_the_host_root(self):
+        self.assertEqual(
+            deeplinks.banner_urls("https://tahaknd.github.io/ceyizim/"),
+            ["https://tahaknd.github.io/ceyizim/", "https://tahaknd.github.io/"])
+
+    def test_a_root_site_yields_just_the_root(self):
+        self.assertEqual(deeplinks.banner_urls("https://example.com/"),
+                         ["https://example.com/"])
+
+    def test_scheme_is_optional_and_missing_input_is_empty(self):
+        self.assertEqual(deeplinks.banner_urls("example.com/app"),
+                         ["https://example.com/app", "https://example.com/"])
+        self.assertEqual(deeplinks.banner_urls(None), [])
+        self.assertEqual(deeplinks.banner_urls(""), [])
+
+    def test_the_banner_is_found_on_the_project_page(self):
+        """Regression: a GitHub Pages project site 404s at the host root, so
+        checking only the root reported the site as unreadable."""
+        app = make_app(seller_url="https://example.github.io/ceyizim/")
+        mapping = {
+            "https://example.github.io/.well-known/apple-app-site-association":
+                json.dumps(AASA),
+            "https://example.github.io/ceyizim/": BANNER,
+            # the host root is deliberately absent: it 404s in real life
+        }
+        with mock.patch.object(net, "get", responder(mapping)):
+            findings = deeplinks.check(app, ttl=0)
+        banner = find(findings, "deeplink.banner")
+        self.assertEqual(banner.severity, aso.OK)
+
+    def test_an_unreadable_site_names_what_was_tried(self):
+        app = make_app(seller_url="https://example.com/app/")
+        mapping = {
+            "https://example.com/.well-known/apple-app-site-association":
+                json.dumps(AASA),
+        }
+        with mock.patch.object(net, "get", responder(mapping)):
+            findings = deeplinks.check(app, ttl=0)
+        banner = find(findings, "deeplink.banner")
+        self.assertEqual(banner.severity, aso.INFO)
+        self.assertIn("example.com/app/", banner.detail)

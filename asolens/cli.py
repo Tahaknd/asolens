@@ -144,8 +144,13 @@ def cmd_analyze(args):
         "assets": None,
     }
 
+    markets = app.get("review_markets") or [country]
+    if not args.no_reviews and not app["reviews"]:
+        # Silence here reads as "reviews were skipped" rather than "none
+        # exist", which is the difference between a gap and a finding.
+        print("· %s mağazasında yazılı yorum bulunamadı." % (
+            "/".join(c.upper() for c in markets)))
     if app["reviews"]:
-        markets = app.get("review_markets") or [country]
         print("· %s mağazasından %d yorum analiz ediliyor…" % (
             "/".join(c.upper() for c in markets), len(app["reviews"])))
         result["reviews"] = reviews.summarize(app["reviews"])

@@ -100,7 +100,7 @@ def check(app, ttl=3600):
             "kullanıcı tarayıcıda kalır — app'e giden en ucuz trafik kanalı "
             "kapalı." % ", ".join(candidates),
             10, candidates))
-        out += _banner_check(host, app, ttl)
+        out += _banner_check(app, ttl)
         return out
 
     out.append(Finding(
@@ -116,7 +116,7 @@ def check(app, ttl=3600):
         out.append(Finding(
             "deeplink.details", CRITICAL, "applinks.details boş",
             "Dosya var ama hiçbir app eşleşmesi tanımlı değil.", 8, None))
-        out += _banner_check(host, app, ttl)
+        out += _banner_check(app, ttl)
         return out
 
     app_ids = []
@@ -157,24 +157,58 @@ def check(app, ttl=3600):
              else ", ".join(paths[:10]) + ("…" if len(paths) > 10 else "")),
             4, paths[:20]))
 
-    out += _banner_check(host, app, ttl)
+    out += _banner_check(app, ttl)
     return out
 
 
-def _banner_check(host, app, ttl):
+def banner_urls(seller_url):
+    """Pages to look for a Smart App Banner on, most specific first.
+
+    The AASA file must sit at the domain root because that is where iOS looks
+    for it, but the marketing page often does not: GitHub Pages project sites
+    live at /project/, and a bare host root there is a 404. Checking only the
+    root reports "site unreadable" for a site that is perfectly fine.
+    """
+    if not seller_url:
+        return []
+    if "//" not in seller_url:
+        seller_url = "https://" + seller_url
+    parsed = urllib.parse.urlparse(seller_url)
+    host = parsed.netloc.lower().split(":")[0]
+    if not host:
+        return []
+    urls = []
+    path = parsed.path or "/"
+    if path not in ("", "/"):
+        urls.append("https://%s%s" % (host, path))
+    urls.append("https://%s/" % host)
+    return urls
+
+
+def _banner_check(app, ttl):
     """Smart App Banner is the mobile-web equivalent of a site-wide CTA."""
-    try:
-        html = net.get("https://%s/" % host, ttl=ttl)
-    except net.FetchError:
+    candidates = banner_urls(app.get("seller_url"))
+    html, source = None, None
+    for url in candidates:
+        try:
+            html = net.get(url, ttl=ttl)
+            source = url
+            break
+        except net.FetchError:
+            continue
+    if html is None:
         return [Finding(
-            "deeplink.banner", INFO, "Site ana sayfası okunamadı",
-            "Smart App Banner kontrolü yapılamadı.", 0, host)]
+            "deeplink.banner", INFO, "Geliştirici sitesi okunamadı",
+            "Denenen adresler: %s. Smart App Banner kontrolü yapılamadı."
+            % (", ".join(candidates) or "—"), 0, candidates)]
+
     match = re.search(
         r'<meta[^>]+name=["\']apple-itunes-app["\'][^>]*content=["\']([^"\']+)',
         html, re.I)
     if not match:
         return [Finding(
-            "deeplink.banner", WARN, "Smart App Banner meta etiketi yok",
+            "deeplink.banner", WARN,
+            "Smart App Banner meta etiketi yok (%s)" % source,
             "Tek satırlık <meta name=\"apple-itunes-app\" content=\"app-id=%s\"> "
             "etiketi, Safari'de siteyi açan herkese app bandı gösteriyor. "
             "Mobil web trafiğini app indirmesine çeviren en düşük maliyetli "
