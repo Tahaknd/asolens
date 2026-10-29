@@ -12,7 +12,7 @@ so a human decides instead of the tool pretending to know.
 import collections
 import re
 
-from asolens.util import days_since, megabytes
+from asolens.util import days_since, human_size, megabytes
 
 CRITICAL = "critical"
 WARN = "warn"
@@ -366,12 +366,15 @@ def _check_reach(app):
     size_mb = megabytes(app.get("size_bytes"))
     if size_mb > 200:
         out.append(Finding(
-            "reach.size", WARN, "Uygulama boyutu %.0f MB" % size_mb,
+            "reach.size", WARN,
+            "Uygulama boyutu %s" % human_size(app.get("size_bytes")),
             "200 MB üstü indirmeler hücresel veride onay istiyor; ilk indirme "
             "dönüşümünü düşürüyor.", 4, round(size_mb)))
     elif size_mb:
         out.append(Finding(
-            "reach.size", OK, "Uygulama boyutu %.0f MB" % size_mb, "", 4, round(size_mb)))
+            "reach.size", OK,
+            "Uygulama boyutu %s" % human_size(app.get("size_bytes")), "", 4,
+            round(size_mb, 1)))
 
     if app.get("min_os"):
         out.append(Finding(

@@ -253,3 +253,18 @@ class UnusableSurveyTests(unittest.TestCase):
         finding = find(aso.audit(app), "ratings.volume")
         self.assertNotIn("En çok oy", finding.detail)
         self.assertNotIn("TR: 9", finding.detail)
+
+
+class SizeReportingTests(unittest.TestCase):
+    def test_size_is_printed_the_way_the_store_page_prints_it(self):
+        """Regression: %.0f turned a 2.5 MB app into "3 MB"."""
+        finding = find(aso.audit(make_app(size_bytes=2_520_064)), "reach.size")
+        self.assertIn("2.5 MB", finding.title)
+
+    def test_the_cellular_threshold_uses_apple_units(self):
+        """205 MB as Apple counts it is over the 200 MB prompt, and used to
+        read as 196 MB after a 2^20 divide."""
+        over = find(aso.audit(make_app(size_bytes=205_000_000)), "reach.size")
+        self.assertEqual(over.severity, aso.WARN)
+        under = find(aso.audit(make_app(size_bytes=195_000_000)), "reach.size")
+        self.assertEqual(under.severity, aso.OK)
