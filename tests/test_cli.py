@@ -230,3 +230,52 @@ class UnreadablePageTests(unittest.TestCase):
             _, output = run(["analyze", "id123456789", "--out", self.out_dir,
                              "--no-assets", "--no-color", "--compare"])
         self.assertIn("ürün sayfası okunamadı", output)
+
+
+class SimulatorBundleTests(unittest.TestCase):
+    """An ad-hoc Simulator signature carries no entitlements, whatever the
+    target is configured with — that is not evidence of a missing one."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.app_path = os.path.join(self.tmp, "Sim.app")
+        os.makedirs(self.app_path)
+
+    def write_plist(self, extra=None):
+        plist = {
+            "CFBundleIdentifier": "com.example.sim",
+            "CFBundleName": "Sim",
+            "CFBundleShortVersionString": "1.0",
+            "CFBundleVersion": "1",
+            "MinimumOSVersion": "17.0",
+            "UILaunchScreen": {},
+            "ITSAppUsesNonExemptEncryption": False,
+            "CFBundleURLTypes": [{"CFBundleURLSchemes": ["sim"]}],
+        }
+        plist.update(extra or {})
+        with open(os.path.join(self.app_path, "Info.plist"), "wb") as fh:
+            plistlib.dump(plist, fh)
+        open(os.path.join(self.app_path, "PrivacyInfo.xcprivacy"), "w").close()
+
+    def audit(self):
+        from asolens import crawl
+        with mock.patch("asolens.crawl.ios_sim._entitlements", return_value={}):
+            return crawl.static_audit(self.app_path)[1]
+
+    def test_simulator_build_reports_unknown_not_missing(self):
+        self.write_plist({"DTPlatformName": "iphonesimulator"})
+        finding = next(f for f in self.audit()
+                       if f.check == "bundle.associated_domains")
+        self.assertEqual(finding.severity, "info")
+        self.assertEqual(finding.weight, 0)
+
+    def test_device_build_with_no_entitlements_is_still_a_warning(self):
+        self.write_plist({"DTPlatformName": "iphoneos"})
+        from asolens import crawl
+        with mock.patch("asolens.crawl.ios_sim._entitlements",
+                        return_value={"application-identifier": "X.com.example.sim"}):
+            findings = crawl.static_audit(self.app_path)[1]
+        finding = next(f for f in findings
+                       if f.check == "bundle.associated_domains")
+        self.assertEqual(finding.severity, "warn")

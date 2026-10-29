@@ -110,7 +110,8 @@ def static_audit(app_path):
             d[:-6] for d in os.listdir(app_path) if d.endswith(".lproj")),
         "associated_domains": (ents or {}).get(
             "com.apple.developer.associated-domains") or [],
-        "entitlements_read": ents is not None,
+        "entitlements_read": bool(ents),
+        "platform": plist.get("DTPlatformName") or "",
     }
 
     findings.append(Finding(
@@ -189,6 +190,17 @@ def static_audit(app_path):
             "bundle.associated_domains", OK,
             "%d associated domain tanımlı" % len(info["associated_domains"]),
             ", ".join(info["associated_domains"]), 6, info["associated_domains"]))
+    elif info["platform"] == "iphonesimulator" and not info["entitlements_read"]:
+        # A Simulator build is ad-hoc signed and its signature carries an
+        # empty entitlements dict, whatever the target is configured with.
+        # The real entitlements sit in a -Simulated.xcent beside the build, so
+        # an empty signature here says nothing about associated domains.
+        findings.append(Finding(
+            "bundle.associated_domains", INFO,
+            "Simulator derlemesi: entitlement imzada taşınmıyor",
+            "Associated domains kontrolü için cihaz veya arşiv derlemesi "
+            "gerekiyor. Hedefin ayarı doğru olsa da bu imza boş görünür.",
+            0, None))
     elif info["entitlements_read"]:
         findings.append(Finding(
             "bundle.associated_domains", WARN, "Associated domain yok",
