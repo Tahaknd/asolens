@@ -12,7 +12,7 @@ so a human decides instead of the tool pretending to know.
 import collections
 import re
 
-from asolens.util import days_since
+from asolens.util import days_since, megabytes
 
 CRITICAL = "critical"
 WARN = "warn"
@@ -363,7 +363,7 @@ def _check_reach(app):
                 "Tek pazarda olduğu için liste lokalizasyonu şu an gereksiz.",
                 0, local["available_in"]))
 
-    size_mb = (app.get("size_bytes") or 0) / 1048576.0
+    size_mb = megabytes(app.get("size_bytes"))
     if size_mb > 200:
         out.append(Finding(
             "reach.size", WARN, "Uygulama boyutu %.0f MB" % size_mb,

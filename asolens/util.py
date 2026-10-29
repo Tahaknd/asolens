@@ -20,13 +20,26 @@ def days_since(stamp):
     return (datetime.datetime.now(datetime.timezone.utc) - when).days
 
 
+# Apple states app sizes in decimal units: the store page shows 2.5 MB for
+# 2,520,064 bytes. Dividing by 2^20 gives 2.4 and quietly disagrees with the
+# page the reader is comparing against, and the 200 MB cellular download limit
+# is quoted in these same units.
+MB = 1_000_000
+KB = 1_000
+
+
+def megabytes(size):
+    """Bytes as Apple counts megabytes."""
+    return (size or 0) / float(MB)
+
+
 def human_size(size):
-    """Byte count as KB or MB, whichever reads better."""
+    """Byte count as KB or MB, in the units Apple's own listings use."""
     if not size:
         return "0 KB"
-    if size < 1048576:
-        return "%.0f KB" % (size / 1024.0)
-    return "%.1f MB" % (size / 1048576.0)
+    if size < MB:
+        return "%.0f KB" % (size / float(KB))
+    return "%.1f MB" % megabytes(size)
 
 
 def wrap(text, width):

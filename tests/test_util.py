@@ -19,10 +19,16 @@ class DaysSinceTests(unittest.TestCase):
 
 class HumanSizeTests(unittest.TestCase):
     def test_small_sizes_read_as_kilobytes(self):
-        self.assertEqual(util.human_size(2048), "2 KB")
+        self.assertEqual(util.human_size(2000), "2 KB")
 
     def test_large_sizes_read_as_megabytes(self):
-        self.assertEqual(util.human_size(48 * 1048576), "48.0 MB")
+        self.assertEqual(util.human_size(48 * 1_000_000), "48.0 MB")
+
+    def test_sizes_match_what_the_store_page_shows(self):
+        """Regression: Apple counts megabytes decimally. 2,520,064 bytes is
+        "2.5 MB" on the product page, not the 2.4 that 2^20 gives."""
+        self.assertEqual(util.human_size(2_520_064), "2.5 MB")
+        self.assertAlmostEqual(util.megabytes(2_520_064), 2.520064)
 
     def test_zero_and_none(self):
         self.assertEqual(util.human_size(0), "0 KB")

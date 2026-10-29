@@ -7,7 +7,7 @@ in their indexed fields (title + subtitle) that you do not use at all.
 import collections
 
 from asolens import aso, ios_store
-from asolens.util import days_since, parallel_map
+from asolens.util import days_since, megabytes, parallel_map
 
 
 
@@ -24,7 +24,7 @@ def row(app):
         "rating": app.get("rating"),
         "rating_count": app.get("rating_count"),
         "days_since_update": days_since(app.get("version_released")),
-        "size_mb": round((app.get("size_bytes") or 0) / 1048576.0),
+        "size_mb": round(megabytes(app.get("size_bytes"))),
         "price": app.get("price"),
         "store_url": app.get("store_url"),
     }

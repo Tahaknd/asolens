@@ -12,7 +12,7 @@ class RowTests(unittest.TestCase):
         self.assertEqual(row["subtitle_len"], len("Save money without effort"))
         self.assertEqual(row["screenshots"], 6)
         self.assertEqual(row["languages"], 3)
-        self.assertEqual(row["size_mb"], 48)
+        self.assertEqual(row["size_mb"], 50)
         self.assertEqual(row["days_since_update"], 40)
 
     def test_missing_release_date_does_not_crash(self):
